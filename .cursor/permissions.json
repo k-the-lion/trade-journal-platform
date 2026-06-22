@@ -1,0 +1,42 @@
+{
+  "terminalAllowlist": [
+    "npm",
+    "npx",
+    "node",
+    "git",
+    "curl",
+    "mkdir",
+    "cp",
+    "mv",
+    "cat",
+    "ls",
+    "cd",
+    "touch",
+    "rm",
+    "find",
+    "grep",
+    "head",
+    "tail",
+    "wc",
+    "chmod",
+    "npm:install*",
+    "npm:run*",
+    "npm:audit*",
+    "npx:create-next-app*",
+    "npx:tsc*"
+  ],
+  "autoRun": {
+    "allow_instructions": [
+      "Install dependencies, run dev/build/lint/test, and scaffold files for the trading-journal Next.js app.",
+      "Read and write project files under the trading-journal workspace.",
+      "Run git status, diff, and log for this repository.",
+      "Fetch npm packages and Google Fonts during builds.",
+      "Use Supabase MCP tools to execute_sql and apply_migration on the trading-journal dev project."
+    ],
+    "block_instructions": [
+      "Do not force-push to main or master.",
+      "Do not run destructive rm -rf outside node_modules or .next.",
+      "Do not modify global git config or SSH keys."
+    ]
+  }
+}

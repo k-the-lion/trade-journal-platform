@@ -1,0 +1,4 @@
+Date,Symbol,Direction,Entry,Exit,Quantity,PnL,R,Setup,Notes,ID
+2026-06-01T09:30:00,ES,long,5200,5210,2,200,1.5,breakout,Clean open drive,csv-001
+2026-06-02T10:15:00,NQ,short,18500,18520,1,-400,-1,reversal,Chased entry,csv-002
+2026-06-03T14:00:00,ES,long,5225,5235,1,250,2, pullback,Followed plan,csv-003
