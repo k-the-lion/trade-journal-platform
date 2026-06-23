@@ -15,8 +15,6 @@ export default async function ChatPage({
   const profile = await getProfile();
   if (!profile) redirect("/login");
 
-  await cleanupUnusedChatSessions();
-
   if (!sessionId) {
     const fresh = await openChatSession();
     redirect(`/chat?session=${fresh.id}`);
@@ -35,6 +33,8 @@ export default async function ChatPage({
   }
 
   const activeSession = session;
+
+  await cleanupUnusedChatSessions(activeSession.id);
 
   const { data: messages } = await supabase
     .from("chat_messages")

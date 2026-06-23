@@ -779,12 +779,15 @@ export async function deleteChatSession(sessionId: string) {
   revalidatePath("/chat");
 }
 
-export async function cleanupUnusedChatSessions() {
+export async function cleanupUnusedChatSessions(keepSessionId?: string) {
   const supabase = await createClient();
   const profile = await getProfile();
   if (!profile) return;
 
-  await supabase.rpc("cleanup_empty_chat_sessions", { p_user_id: profile.id });
+  await supabase.rpc("cleanup_empty_chat_sessions", {
+    p_user_id: profile.id,
+    p_keep_session_id: keepSessionId ?? null,
+  });
 }
 
 export async function createChatSession(title?: string) {
