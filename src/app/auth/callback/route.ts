@@ -1,12 +1,24 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import {
+  authErrorCodeFromUrl,
+  isAuthCallbackError,
+} from "@/lib/auth/errors";
+import { getAuthCallbackUrl, getSiteOrigin } from "@/lib/auth/site-url";
 
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
+  const requestUrl = new URL(request.url);
+  const { searchParams } = requestUrl;
+  const origin = getSiteOrigin(requestUrl.origin);
   const next = searchParams.get("next") ?? "/dashboard";
 
+  if (isAuthCallbackError(requestUrl)) {
+    const code = authErrorCodeFromUrl(requestUrl);
+    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(code)}`);
+  }
+
+  const code = searchParams.get("code");
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`);
   }
@@ -39,8 +51,13 @@ export async function GET(request: Request) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
+    const mapped =
+      error.message.toLowerCase().includes("expired") ||
+      error.message.toLowerCase().includes("invalid")
+        ? "otp_expired"
+        : error.message;
     return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent(error.message)}`
+      `${origin}/login?error=${encodeURIComponent(mapped)}`
     );
   }
 

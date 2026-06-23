@@ -1,7 +1,26 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  authErrorCodeFromUrl,
+  isAuthCallbackError,
+} from "@/lib/auth/errors";
 
 export async function updateSession(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+
+  if (
+    isAuthCallbackError(request.nextUrl) &&
+    (pathname === "/" ||
+      pathname.startsWith("/auth") ||
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/signup"))
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    url.search = `?error=${encodeURIComponent(authErrorCodeFromUrl(request.nextUrl))}`;
+    return NextResponse.redirect(url);
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -29,7 +48,6 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
   const isAuthPage =
     pathname.startsWith("/login") || pathname.startsWith("/signup");
   const isPublic =

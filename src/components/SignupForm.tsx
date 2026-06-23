@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { getAuthCallbackUrl } from "@/lib/auth/site-url";
 import type { AuthError } from "@supabase/supabase-js";
 
 function formatAuthError(error: AuthError): string {
@@ -34,7 +35,7 @@ export function SignupForm() {
         password,
         options: {
           data: { full_name: fullName },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: getAuthCallbackUrl(),
         },
       });
 
@@ -66,9 +67,16 @@ export function SignupForm() {
         </p>
       )}
       {needsEmailConfirm && (
-        <p className="text-sm text-success bg-success/10 border border-success/30 rounded-md p-3">
-          Check your email to confirm your account, then sign in.
-        </p>
+        <div className="text-sm text-success bg-success/10 border border-success/30 rounded-md p-3 space-y-1">
+          <p>Check your email to confirm your account.</p>
+          <p className="text-muted text-xs">
+            Open the link within an hour. If it expires, go to{" "}
+            <Link href="/login" className="text-primary hover:underline">
+              Sign in
+            </Link>{" "}
+            and request a new confirmation email.
+          </p>
+        </div>
       )}
       <div>
         <label className="label" htmlFor="fullName">Full name</label>
