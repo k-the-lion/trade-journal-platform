@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, getProfile } from "@/lib/supabase/server";
-import type { AccountType, TradeInput } from "@/lib/types/database";
+import type { AccountType, TradeInput, TradingStrategy } from "@/lib/types/database";
 import { permanentlyDeleteTradesForUser } from "@/lib/trades/delete";
 import { BUCKET, tradeScreenshotPath } from "@/lib/supabase/storage";
 import { resolveStrategyFields } from "@/lib/strategies/sync";
@@ -80,10 +80,7 @@ export async function createStrategy(data: {
     .single();
 
   if (error) throw new Error(error.message);
-  revalidatePath("/strategies");
-  revalidatePath("/dashboard");
-  revalidatePath("/import");
-  return strategy;
+  return strategy as TradingStrategy;
 }
 
 export async function updateStrategy(
@@ -117,10 +114,7 @@ export async function updateStrategy(
       .eq("strategy_id", id);
   }
 
-  revalidatePath("/strategies");
-  revalidatePath("/dashboard");
-  revalidatePath("/import");
-  return strategy;
+  return strategy as TradingStrategy;
 }
 
 export async function deleteStrategy(id: string) {
@@ -135,8 +129,6 @@ export async function deleteStrategy(id: string) {
     .eq("user_id", profile.id);
 
   if (error) throw new Error(error.message);
-  revalidatePath("/strategies");
-  revalidatePath("/dashboard");
 }
 
 export async function seedStrategyTemplates() {
@@ -165,7 +157,6 @@ export async function seedStrategyTemplates() {
     if (error) throw new Error(error.message);
   }
 
-  revalidatePath("/strategies");
   return { added: toInsert.length };
 }
 

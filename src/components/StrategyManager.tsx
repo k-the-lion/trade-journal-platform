@@ -17,21 +17,26 @@ export function StrategyManager({
 }) {
   const [strategies, setStrategies] = useState(initialStrategies);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-
-  const editing = strategies.find((s) => s.id === editingId);
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    setError(null);
     startTransition(async () => {
-      const strategy = await createStrategy({
-        name: String(fd.get("name")),
-        description: String(fd.get("description") || "") || null,
-        rules: String(fd.get("rules")),
-      });
-      setStrategies((prev) => [...prev, strategy as TradingStrategy]);
-      e.currentTarget.reset();
+      try {
+        const strategy = await createStrategy({
+          name: String(fd.get("name")),
+          description: String(fd.get("description") || "") || null,
+          rules: String(fd.get("rules")),
+        });
+        setStrategies((prev) => [...prev, strategy as TradingStrategy]);
+        form.reset();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to create strategy");
+      }
     });
   }
 
@@ -39,16 +44,21 @@ export function StrategyManager({
     e.preventDefault();
     if (!editingId) return;
     const fd = new FormData(e.currentTarget);
+    setError(null);
     startTransition(async () => {
-      const updated = await updateStrategy(editingId, {
-        name: String(fd.get("name")),
-        description: String(fd.get("description") || "") || null,
-        rules: String(fd.get("rules")),
-      });
-      setStrategies((prev) =>
-        prev.map((s) => (s.id === editingId ? (updated as TradingStrategy) : s))
-      );
-      setEditingId(null);
+      try {
+        const updated = await updateStrategy(editingId, {
+          name: String(fd.get("name")),
+          description: String(fd.get("description") || "") || null,
+          rules: String(fd.get("rules")),
+        });
+        setStrategies((prev) =>
+          prev.map((s) => (s.id === editingId ? (updated as TradingStrategy) : s))
+        );
+        setEditingId(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update strategy");
+      }
     });
   }
 
@@ -73,6 +83,11 @@ export function StrategyManager({
 
   return (
     <div className="space-y-6 max-w-3xl">
+      {error && (
+        <div className="text-sm text-danger bg-danger/10 border border-danger/30 rounded-md p-3">
+          {error}
+        </div>
+      )}
       {strategies.length === 0 && (
         <div className="card p-5 text-sm text-muted space-y-3">
           <p>No strategies yet. Create your own or add starter templates with example rules.</p>
