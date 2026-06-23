@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
   bulkAssignStrategy,
@@ -13,6 +13,7 @@ import {
 import { parseStrategyRules } from "@/lib/constants/strategies";
 import { moodEmoji, moodLabel } from "@/lib/constants/trade-meta";
 import { computeTradeStats, formatCurrency } from "@/lib/reports/stats";
+import { isAllowedChartLink, normalizeChartLink } from "@/lib/screenshots";
 import { MoodPicker } from "@/components/MoodPicker";
 import { DeleteAllTradesPanel } from "@/components/DeleteAllTradesPanel";
 import { DeleteTradeButton } from "@/components/DeleteTradeButton";
@@ -120,6 +121,69 @@ export function TradeJournalBoard({
 
   const stats = useMemo(() => computeTradeStats(filtered), [filtered]);
 
+  const handleJournalSave = useCallback(
+    async (
+      tradeId: string,
+      notes: string,
+      mood: string,
+      strategyId: string,
+      ruleFollowed: string,
+      tagsRaw: string
+    ) => {
+      const tags = tagsRaw
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      const selected = strategies.find((s) => s.id === strategyId);
+
+      await updateTradeJournal(tradeId, {
+        notes: notes || null,
+        emotional_state: mood || null,
+        strategy_id: strategyId || null,
+        rule_followed:
+          ruleFollowed === "yes" ? true : ruleFollowed === "no" ? false : null,
+        tags,
+      });
+      setTrades((prev) =>
+        prev.map((t) =>
+          t.id === tradeId
+            ? {
+                ...t,
+                notes: notes || null,
+                emotional_state: mood || null,
+                strategy_id: strategyId || null,
+                setup_tag: selected?.name ?? null,
+                trading_strategies: selected ?? null,
+                rule_followed:
+                  ruleFollowed === "yes" ? true : ruleFollowed === "no" ? false : null,
+                trade_tags: tags.map((tag, i) => ({
+                  id: `local-${i}`,
+                  trade_id: tradeId,
+                  tag,
+                })),
+              }
+            : t
+        )
+      );
+    },
+    [strategies]
+  );
+
+  const handleScreenshotLink = useCallback(async (tradeId: string, url: string) => {
+    const inserted = await addTradeScreenshotLink(tradeId, url);
+    setTrades((prev) =>
+      prev.map((t) =>
+        t.id === tradeId
+          ? {
+              ...t,
+              trade_screenshots: [...(t.trade_screenshots ?? []), inserted],
+            }
+          : t
+      )
+    );
+  }, []);
+
   function toggleStrategyFilter(id: string) {
     setFilterStrategyIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -165,61 +229,6 @@ export function TradeJournalBoard({
   function sortIndicator(key: SortKey) {
     if (sortKey !== key) return "";
     return sortDir === "asc" ? " ↑" : " ↓";
-  }
-
-  async function handleJournalSave(
-    tradeId: string,
-    notes: string,
-    mood: string,
-    strategyId: string,
-    ruleFollowed: string,
-    tagsRaw: string
-  ) {
-    const tags = tagsRaw
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-
-    const selected = strategies.find((s) => s.id === strategyId);
-
-    startTransition(async () => {
-      await updateTradeJournal(tradeId, {
-        notes: notes || null,
-        emotional_state: mood || null,
-        strategy_id: strategyId || null,
-        rule_followed:
-          ruleFollowed === "yes" ? true : ruleFollowed === "no" ? false : null,
-        tags,
-      });
-      setTrades((prev) =>
-        prev.map((t) =>
-          t.id === tradeId
-            ? {
-                ...t,
-                notes: notes || null,
-                emotional_state: mood || null,
-                strategy_id: strategyId || null,
-                setup_tag: selected?.name ?? null,
-                trading_strategies: selected ?? null,
-                rule_followed:
-                  ruleFollowed === "yes" ? true : ruleFollowed === "no" ? false : null,
-                trade_tags: tags.map((tag, i) => ({
-                  id: `local-${i}`,
-                  trade_id: tradeId,
-                  tag,
-                })),
-              }
-            : t
-        )
-      );
-    });
-  }
-
-  async function handleScreenshotLink(tradeId: string, url: string) {
-    startTransition(async () => {
-      await addTradeScreenshotLink(tradeId, url);
-      window.location.reload();
-    });
   }
 
   async function handleScreenshotUpload(tradeId: string, file: File) {
@@ -641,9 +650,9 @@ function TradeJournalRow({
     strategyId: string,
     ruleFollowed: string,
     tags: string
-  ) => void;
+  ) => Promise<void>;
   onUpload: (file: File) => void;
-  onAddLink: (url: string) => void;
+  onAddLink: (url: string) => Promise<void>;
   onDeleteScreenshot: (id: string) => void;
   onDeleted: (tradeId: string) => void;
   strategies: TradingStrategy[];
@@ -659,6 +668,74 @@ function TradeJournalRow({
     trade.trade_tags?.map((t) => t.tag).join(", ") ?? ""
   );
   const [chartLink, setChartLink] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [linkStatus, setLinkStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const skipJournalSaveRef = useRef(true);
+  const addingLinkRef = useRef(false);
+
+  const screenshots = trade.trade_screenshots ?? [];
+
+  useEffect(() => {
+    setNotes(trade.notes ?? "");
+    setMood(trade.emotional_state ?? "");
+    setStrategyId(trade.strategy_id ?? "");
+    setRuleFollowed(
+      trade.rule_followed === true ? "yes" : trade.rule_followed === false ? "no" : ""
+    );
+    setTags(trade.trade_tags?.map((t) => t.tag).join(", ") ?? "");
+    setChartLink("");
+    skipJournalSaveRef.current = true;
+  }, [trade.id]);
+
+  useEffect(() => {
+    if (!expanded) return;
+    if (skipJournalSaveRef.current) {
+      skipJournalSaveRef.current = false;
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setSaveStatus("saving");
+      try {
+        await onSave(trade.id, notes, mood, strategyId, ruleFollowed, tags);
+        setSaveStatus("saved");
+        window.setTimeout(() => setSaveStatus("idle"), 2000);
+      } catch {
+        setSaveStatus("error");
+      }
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [expanded, trade.id, notes, mood, strategyId, ruleFollowed, tags, onSave]);
+
+  useEffect(() => {
+    if (!expanded || !chartLink.trim() || addingLinkRef.current) return;
+
+    const normalized = normalizeChartLink(chartLink);
+    if (!isAllowedChartLink(normalized)) return;
+
+    const exists = screenshots.some(
+      (s) => normalizeChartLink(s.link_url ?? "") === normalized
+    );
+    if (exists) return;
+
+    const timer = window.setTimeout(async () => {
+      addingLinkRef.current = true;
+      setLinkStatus("saving");
+      try {
+        await onAddLink(normalized);
+        setChartLink("");
+        setLinkStatus("saved");
+        window.setTimeout(() => setLinkStatus("idle"), 2000);
+      } catch {
+        setLinkStatus("error");
+      } finally {
+        addingLinkRef.current = false;
+      }
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [chartLink, expanded, screenshots, onAddLink]);
 
   const selectedStrategy =
     strategies.find((s) => s.id === strategyId) ?? trade.trading_strategies ?? null;
@@ -667,7 +744,6 @@ function TradeJournalRow({
     : [];
 
   const accountName = trade.trading_accounts?.name;
-  const screenshots = trade.trade_screenshots ?? [];
   const pnl = Number(trade.pnl);
   const thumb = firstTradeMedia(screenshots);
   const extraTags = trade.trade_tags?.map((t) => t.tag) ?? [];
@@ -744,6 +820,21 @@ function TradeJournalRow({
 
       {expanded && (
         <div className="mt-4 pl-0 sm:pl-[4.75rem] space-y-4 border-t border-border/40 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted">Changes save automatically</p>
+            <p className="text-xs text-muted">
+              {saveStatus === "saving" && "Saving…"}
+              {saveStatus === "saved" && <span className="text-success">Saved</span>}
+              {saveStatus === "error" && <span className="text-danger">Save failed</span>}
+              {linkStatus === "saving" && " · Adding chart link…"}
+              {linkStatus === "saved" && (
+                <span className="text-success"> · Chart link added</span>
+              )}
+              {linkStatus === "error" && (
+                <span className="text-danger"> · Could not add link</span>
+              )}
+            </p>
+          </div>
           <div>
             <p className="label mb-2">How did you feel?</p>
             <MoodPicker value={mood} onChange={setMood} />
@@ -848,38 +939,15 @@ function TradeJournalRow({
                 />
               </label>
             </div>
-            <form
-              className="flex flex-wrap gap-2 mt-3"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!chartLink.trim()) return;
-                onAddLink(chartLink.trim());
-                setChartLink("");
-              }}
-            >
-              <input
-                className="input flex-1 min-w-[200px] text-sm"
-                value={chartLink}
-                onChange={(e) => setChartLink(e.target.value)}
-                placeholder="https://www.tradingview.com/x/..."
-              />
-              <button type="submit" className="btn btn-secondary text-xs py-1.5" disabled={pending}>
-                Add TradingView link
-              </button>
-            </form>
+            <input
+              className="input w-full text-sm mt-3"
+              value={chartLink}
+              onChange={(e) => setChartLink(e.target.value)}
+              placeholder="Paste TradingView link — saves automatically"
+            />
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="btn btn-primary text-sm"
-              disabled={pending}
-              onClick={() =>
-                onSave(trade.id, notes, mood, strategyId, ruleFollowed, tags)
-              }
-            >
-              {pending ? "Saving..." : "Save journal"}
-            </button>
             <Link
               href={`/trades/${trade.id}`}
               className="btn btn-secondary text-sm"

@@ -319,17 +319,22 @@ export async function addTradeScreenshotLink(tradeId: string, rawUrl: string) {
     .select("*", { count: "exact", head: true })
     .eq("trade_id", tradeId);
 
-  const { error } = await supabase.from("trade_screenshots").insert({
-    trade_id: tradeId,
-    storage_path: null,
-    link_url,
-    sort_order: count ?? 0,
-  });
+  const { data: inserted, error } = await supabase
+    .from("trade_screenshots")
+    .insert({
+      trade_id: tradeId,
+      storage_path: null,
+      link_url,
+      sort_order: count ?? 0,
+    })
+    .select()
+    .single();
 
   if (error) throw new Error(error.message);
 
   revalidatePath("/dashboard");
   revalidatePath(`/trades/${tradeId}`);
+  return inserted;
 }
 
 export async function deleteTradeScreenshot(screenshotId: string) {
