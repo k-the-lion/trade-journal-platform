@@ -5,9 +5,11 @@ import {
   BreakdownChart,
   BreakdownTable,
 } from "@/components/Charts";
+import { PnlCalendar } from "@/components/PnlCalendar";
 import {
   computeTradeStats,
   computeEquityCurve,
+  computeDailyPnl,
   breakdownBySymbol,
   breakdownBySetup,
   breakdownByDayOfWeek,
@@ -30,6 +32,7 @@ export default async function ReportsPage() {
   const list = (trades ?? []) as Trade[];
   const stats = computeTradeStats(list);
   const equity = computeEquityCurve(list);
+  const dailyPnl = computeDailyPnl(list);
 
   return (
     <div className="space-y-8">
@@ -54,6 +57,8 @@ export default async function ReportsPage() {
       </div>
 
       <EquityCurveChart data={equity} />
+
+      <PnlCalendar dailyPnl={dailyPnl} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <BreakdownChart data={breakdownBySymbol(list)} title="P&L by Symbol" />

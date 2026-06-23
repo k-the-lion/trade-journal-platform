@@ -195,3 +195,16 @@ export function formatCurrency(n: number) {
 export function formatPct(n: number) {
   return `${n.toFixed(1)}%`;
 }
+
+export function computeDailyPnl(trades: Trade[]): Record<string, number> {
+  const daily = new Map<string, number>();
+  for (const t of trades) {
+    const day = t.traded_at.slice(0, 10);
+    daily.set(day, (daily.get(day) ?? 0) + Number(t.pnl));
+  }
+  const result: Record<string, number> = {};
+  for (const [day, pnl] of daily) {
+    result[day] = round(pnl);
+  }
+  return result;
+}

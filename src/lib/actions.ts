@@ -211,6 +211,8 @@ export async function updateTradeJournal(
   data: {
     notes?: string | null;
     emotional_state?: string | null;
+    mood_before?: string | null;
+    mood_after?: string | null;
     setup_tag?: string | null;
     strategy_id?: string | null;
     rule_followed?: boolean | null;

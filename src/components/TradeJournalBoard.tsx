@@ -125,7 +125,8 @@ export function TradeJournalBoard({
     async (
       tradeId: string,
       notes: string,
-      mood: string,
+      moodBefore: string,
+      moodAfter: string,
       strategyId: string,
       ruleFollowed: string,
       tagsRaw: string
@@ -139,7 +140,9 @@ export function TradeJournalBoard({
 
       await updateTradeJournal(tradeId, {
         notes: notes || null,
-        emotional_state: mood || null,
+        mood_before: moodBefore || null,
+        mood_after: moodAfter || null,
+        emotional_state: moodAfter || moodBefore || null,
         strategy_id: strategyId || null,
         rule_followed:
           ruleFollowed === "yes" ? true : ruleFollowed === "no" ? false : null,
@@ -151,7 +154,9 @@ export function TradeJournalBoard({
             ? {
                 ...t,
                 notes: notes || null,
-                emotional_state: mood || null,
+                mood_before: moodBefore || null,
+                mood_after: moodAfter || null,
+                emotional_state: moodAfter || moodBefore || null,
                 strategy_id: strategyId || null,
                 setup_tag: selected?.name ?? null,
                 trading_strategies: selected ?? null,
@@ -646,7 +651,8 @@ function TradeJournalRow({
   onSave: (
     id: string,
     notes: string,
-    mood: string,
+    moodBefore: string,
+    moodAfter: string,
     strategyId: string,
     ruleFollowed: string,
     tags: string
@@ -659,7 +665,12 @@ function TradeJournalRow({
   tagPresets: TradingTagPreset[];
 }) {
   const [notes, setNotes] = useState(trade.notes ?? "");
-  const [mood, setMood] = useState(trade.emotional_state ?? "");
+  const [moodBefore, setMoodBefore] = useState(
+    trade.mood_before ?? trade.emotional_state ?? ""
+  );
+  const [moodAfter, setMoodAfter] = useState(
+    trade.mood_after ?? trade.emotional_state ?? ""
+  );
   const [strategyId, setStrategyId] = useState(trade.strategy_id ?? "");
   const [ruleFollowed, setRuleFollowed] = useState(
     trade.rule_followed === true ? "yes" : trade.rule_followed === false ? "no" : ""
@@ -677,7 +688,8 @@ function TradeJournalRow({
 
   useEffect(() => {
     setNotes(trade.notes ?? "");
-    setMood(trade.emotional_state ?? "");
+    setMoodBefore(trade.mood_before ?? trade.emotional_state ?? "");
+    setMoodAfter(trade.mood_after ?? trade.emotional_state ?? "");
     setStrategyId(trade.strategy_id ?? "");
     setRuleFollowed(
       trade.rule_followed === true ? "yes" : trade.rule_followed === false ? "no" : ""
@@ -697,7 +709,7 @@ function TradeJournalRow({
     const timer = window.setTimeout(async () => {
       setSaveStatus("saving");
       try {
-        await onSave(trade.id, notes, mood, strategyId, ruleFollowed, tags);
+        await onSave(trade.id, notes, moodBefore, moodAfter, strategyId, ruleFollowed, tags);
         setSaveStatus("saved");
         window.setTimeout(() => setSaveStatus("idle"), 2000);
       } catch {
@@ -706,7 +718,7 @@ function TradeJournalRow({
     }, 700);
 
     return () => window.clearTimeout(timer);
-  }, [expanded, trade.id, notes, mood, strategyId, ruleFollowed, tags, onSave]);
+  }, [expanded, trade.id, notes, moodBefore, moodAfter, strategyId, ruleFollowed, tags, onSave]);
 
   useEffect(() => {
     if (!expanded || !chartLink.trim() || addingLinkRef.current) return;
@@ -779,9 +791,17 @@ function TradeJournalRow({
                 <span className="text-xs capitalize text-muted">
                   {trade.direction}
                 </span>
-                <span className="text-lg" title={moodLabel(trade.emotional_state)}>
-                  {moodEmoji(trade.emotional_state)}
-                </span>
+                {(trade.mood_before || trade.mood_after || trade.emotional_state) && (
+                  <span className="inline-flex items-center gap-0.5 text-lg" title="Before → after mood">
+                    <span title={moodLabel(trade.mood_before ?? trade.emotional_state)}>
+                      {moodEmoji(trade.mood_before ?? trade.emotional_state)}
+                    </span>
+                    <span className="text-muted text-xs">→</span>
+                    <span title={moodLabel(trade.mood_after ?? trade.emotional_state)}>
+                      {moodEmoji(trade.mood_after ?? trade.emotional_state)}
+                    </span>
+                  </span>
+                )}
                 {trade.setup_tag && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                     {trade.setup_tag}
@@ -835,9 +855,15 @@ function TradeJournalRow({
               )}
             </p>
           </div>
-          <div>
-            <p className="label mb-2">How did you feel?</p>
-            <MoodPicker value={mood} onChange={setMood} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <p className="label mb-2">How did you feel before the trade?</p>
+              <MoodPicker value={moodBefore} onChange={setMoodBefore} />
+            </div>
+            <div>
+              <p className="label mb-2">How did you feel after the trade?</p>
+              <MoodPicker value={moodAfter} onChange={setMoodAfter} />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

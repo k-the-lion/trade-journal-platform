@@ -17,6 +17,44 @@ function getAnthropic() {
   return new Anthropic({ apiKey: key });
 }
 
+async function ensureChatSession(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  sessionId: string
+) {
+  const { data: session } = await supabase
+    .from("chat_sessions")
+    .select("*")
+    .eq("id", sessionId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (session) return session;
+
+  const { data: memberships } = await supabase
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", userId)
+    .eq("role", "student")
+    .limit(1);
+
+  const { data: created, error } = await supabase
+    .from("chat_sessions")
+    .insert({
+      user_id: userId,
+      org_id: memberships?.[0]?.org_id ?? null,
+      title: "New Session",
+    })
+    .select()
+    .single();
+
+  if (error || !created) {
+    return null;
+  }
+
+  return created;
+}
+
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -32,19 +70,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing sessionId or message" }, { status: 400 });
     }
 
-    const { data: session } = await supabase
-      .from("chat_sessions")
-      .select("*")
-      .eq("id", sessionId)
-      .eq("user_id", profile.id)
-      .single();
+    let session = await ensureChatSession(supabase, profile.id, sessionId);
+    const sessionReplaced = session && session.id !== sessionId;
 
     if (!session) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Could not start a chat session. Refresh the page and try again." },
+        { status: 500 }
+      );
     }
 
+    const activeSessionId = session.id;
+
     await supabase.from("chat_messages").insert({
-      session_id: sessionId,
+      session_id: activeSessionId,
       role: "user",
       content: message.trim(),
     });
@@ -58,7 +97,7 @@ export async function POST(request: Request) {
           title: sessionTitle,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", sessionId);
+        .eq("id", activeSessionId);
     }
 
     const { data: trades } = await supabase
@@ -117,7 +156,7 @@ export async function POST(request: Request) {
     const { data: history } = await supabase
       .from("chat_messages")
       .select("role, content")
-      .eq("session_id", sessionId)
+      .eq("session_id", activeSessionId)
       .order("created_at", { ascending: true })
       .limit(20);
 
@@ -157,7 +196,7 @@ export async function POST(request: Request) {
     }
 
     await supabase.from("chat_messages").insert({
-      session_id: sessionId,
+      session_id: activeSessionId,
       role: "assistant",
       content: assistantContent,
     });
@@ -165,9 +204,13 @@ export async function POST(request: Request) {
     await supabase
       .from("chat_sessions")
       .update({ updated_at: new Date().toISOString() })
-      .eq("id", sessionId);
+      .eq("id", activeSessionId);
 
-    return NextResponse.json({ content: assistantContent, sessionTitle });
+    return NextResponse.json({
+      content: assistantContent,
+      sessionTitle,
+      sessionId: sessionReplaced ? activeSessionId : undefined,
+    });
   } catch (err) {
     console.error("Chat API error:", err);
     const errMessage =

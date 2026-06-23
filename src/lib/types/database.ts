@@ -119,6 +119,8 @@ export interface Trade {
   setup_tag: string | null;
   notes: string | null;
   emotional_state: string | null;
+  mood_before: string | null;
+  mood_after: string | null;
   rule_followed: boolean | null;
   account_type: AccountType | null;
   screenshot_url: string | null;
@@ -182,6 +184,8 @@ export interface TradeInput {
   setup_tag?: string | null;
   notes?: string | null;
   emotional_state?: string | null;
+  mood_before?: string | null;
+  mood_after?: string | null;
   rule_followed?: boolean | null;
   account_type?: AccountType | null;
   account_id?: string | null;

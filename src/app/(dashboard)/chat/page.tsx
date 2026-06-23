@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ChatSessionSidebar } from "@/components/ChatSessionSidebar";
-import { openChatSession, cleanupUnusedChatSessions } from "@/lib/actions";
+import { openChatSession } from "@/lib/actions";
 import type { ChatMessage, ChatSession } from "@/lib/types/database";
 
 export default async function ChatPage({
@@ -33,8 +33,6 @@ export default async function ChatPage({
   }
 
   const activeSession = session;
-
-  await cleanupUnusedChatSessions(activeSession.id);
 
   const { data: messages } = await supabase
     .from("chat_messages")

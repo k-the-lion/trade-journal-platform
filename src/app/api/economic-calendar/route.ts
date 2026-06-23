@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { fetchFinnhubCalendar } from "@/lib/economic-calendar/finnhub";
+import { getFinnhubApiKey } from "@/lib/economic-calendar/finnhub-key";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -14,6 +18,16 @@ export async function GET(request: Request) {
   }
 
   try {
+    if (!getFinnhubApiKey()) {
+      return NextResponse.json(
+        {
+          error:
+            "FINNHUB_API_KEY is not configured. In Vercel, add FINNHUB_API_KEY (exact name, Production environment) and redeploy.",
+        },
+        { status: 503 }
+      );
+    }
+
     const events = await fetchFinnhubCalendar(from, to);
     return NextResponse.json(
       { events },

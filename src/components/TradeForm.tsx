@@ -22,7 +22,12 @@ export function TradeForm({
 }: TradeFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [mood, setMood] = useState(trade?.emotional_state ?? "");
+  const [moodBefore, setMoodBefore] = useState(
+    trade?.mood_before ?? trade?.emotional_state ?? ""
+  );
+  const [moodAfter, setMoodAfter] = useState(
+    trade?.mood_after ?? trade?.emotional_state ?? ""
+  );
   const [strategyId, setStrategyId] = useState(trade?.strategy_id ?? "");
 
   const selectedStrategy = strategyOptions.find((s) => s.id === strategyId);
@@ -53,7 +58,9 @@ export function TradeForm({
       r_multiple: fd.get("r_multiple") ? Number(fd.get("r_multiple")) : null,
       strategy_id: strategyId || null,
       notes: String(fd.get("notes") || "") || null,
-      emotional_state: mood || String(fd.get("emotional_state") || "") || null,
+      mood_before: moodBefore || null,
+      mood_after: moodAfter || null,
+      emotional_state: moodAfter || moodBefore || null,
       rule_followed:
         fd.get("rule_followed") === "yes"
           ? true
@@ -206,9 +213,15 @@ export function TradeForm({
         </div>
       )}
 
-      <div>
-        <p className="label mb-2">How did you feel about this trade?</p>
-        <MoodPicker value={mood} onChange={setMood} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <p className="label mb-2">How did you feel before the trade?</p>
+          <MoodPicker value={moodBefore} onChange={setMoodBefore} />
+        </div>
+        <div>
+          <p className="label mb-2">How did you feel after the trade?</p>
+          <MoodPicker value={moodAfter} onChange={setMoodAfter} />
+        </div>
       </div>
 
       <div>

@@ -48,7 +48,12 @@ export function ChatPanel({
         body: JSON.stringify({ sessionId: session.id, message: userMsg }),
       });
       const raw = await res.text();
-      let data: { content?: string; error?: string; sessionTitle?: string } = {};
+      let data: {
+        content?: string;
+        error?: string;
+        sessionTitle?: string;
+        sessionId?: string;
+      } = {};
       if (raw) {
         try {
           data = JSON.parse(raw);
@@ -57,6 +62,10 @@ export function ChatPanel({
         }
       }
       if (!res.ok) {
+        if (res.status === 404 && data.error?.toLowerCase().includes("session")) {
+          router.replace("/chat");
+          return;
+        }
         throw new Error(data.error || `Request failed (${res.status})`);
       }
       const content = data.content;
@@ -76,6 +85,10 @@ export function ChatPanel({
       ]);
       if (data.sessionTitle) {
         setSessionTitle(data.sessionTitle);
+      }
+      if (data.sessionId && data.sessionId !== session.id) {
+        router.replace(`/chat?session=${data.sessionId}`);
+      } else if (data.sessionTitle) {
         router.refresh();
       }
     } catch (err) {
