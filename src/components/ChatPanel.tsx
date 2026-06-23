@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { ChatMessage, ChatSession } from "@/lib/types/database";
+import { ChatMarkdown } from "@/components/ChatMarkdown";
 
 export function ChatPanel({
   session,
@@ -113,15 +114,20 @@ export function ChatPanel({
             key={msg.id}
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
-            <div
-              className={`max-w-[85%] rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap ${
-                msg.role === "user"
-                  ? "bg-primary/20 text-foreground"
-                  : "bg-white/5 border border-border"
-              }`}
-            >
-              {msg.content}
-            </div>
+            {msg.role === "assistant" ? (
+              <div className="max-w-[92%] min-w-0">
+                <p className="text-[0.65rem] uppercase tracking-wider text-muted mb-1.5 px-1">
+                  Coach
+                </p>
+                <div className="rounded-xl px-4 py-3 bg-white/[0.04] border border-border/80 shadow-sm">
+                  <ChatMarkdown content={msg.content} />
+                </div>
+              </div>
+            ) : (
+              <div className="max-w-[85%] rounded-xl px-4 py-2.5 text-sm leading-relaxed bg-primary/15 text-foreground border border-primary/20">
+                {msg.content}
+              </div>
+            )}
           </div>
         ))}
         {loading && (
