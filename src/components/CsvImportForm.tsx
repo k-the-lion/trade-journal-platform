@@ -1,7 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
-import { importCsvTrades } from "@/lib/actions";
+import {
+  bulkAssignStrategyByImportJob,
+  createTradingAccount,
+  importCsvTrades,
+} from "@/lib/actions";
+import { DEFAULT_STRATEGIES } from "@/lib/constants/trade-meta";
 import {
   buildMappingFromHeaders,
   detectImportFormat,
@@ -43,25 +49,80 @@ const EXPORT_GUIDES: Record<ImportPreset, string> = {
   generic: "Any CSV with date, symbol, and P&L columns. Map columns below if needed.",
 };
 
+type AccountOption = { id: string; name: string; is_default?: boolean };
+
 export function CsvImportForm({
   orgOptions = [],
-  accountOptions = [],
+  accountOptions: initialAccountOptions = [],
 }: {
   orgOptions?: { id: string; name: string }[];
-  accountOptions?: { id: string; name: string; is_default?: boolean }[];
+  accountOptions?: AccountOption[];
 }) {
-  const defaultAccount = accountOptions.find((a) => a.is_default) ?? accountOptions[0];
+  const [accountOptions, setAccountOptions] = useState(initialAccountOptions);
+  const defaultAccount =
+    accountOptions.find((a) => a.is_default) ?? accountOptions[0];
+
   const [csvText, setCsvText] = useState("");
   const [preset, setPreset] = useState<ImportPreset>("auto");
   const [detectedLabel, setDetectedLabel] = useState<string | null>(null);
   const [mapping, setMapping] = useState<CsvColumnMapping>({});
   const [headers, setHeaders] = useState<string[]>([]);
-  const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{
+    imported: number;
+    skipped: number;
+    errors: string[];
+    jobId?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [orgId, setOrgId] = useState("");
   const [accountId, setAccountId] = useState(defaultAccount?.id ?? "");
+  const [importStrategy, setImportStrategy] = useState("");
+  const [postImportStrategy, setPostImportStrategy] = useState("");
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountBroker, setNewAccountBroker] = useState("");
+  const [newAccountType, setNewAccountType] = useState("");
 
   const showColumnMapper = preset === "generic" || preset === "auto";
+
+  const [showCreateAccount, setShowCreateAccount] = useState(
+    initialAccountOptions.length === 0
+  );
+  const [creatingAccount, setCreatingAccount] = useState(false);
+
+  async function handleCreateAccountClick() {
+    if (!newAccountName.trim()) {
+      alert("Account name is required");
+      return;
+    }
+    setCreatingAccount(true);
+    try {
+      const account = await createTradingAccount({
+        name: newAccountName.trim(),
+        broker: newAccountBroker.trim() || null,
+        account_type: (newAccountType || null) as
+          | "eval"
+          | "funded"
+          | "personal"
+          | null,
+        is_default: accountOptions.length === 0,
+      });
+      const option = {
+        id: account.id,
+        name: account.name,
+        is_default: account.is_default,
+      };
+      setAccountOptions((prev) => [...prev, option]);
+      setAccountId(account.id);
+      setShowCreateAccount(false);
+      setNewAccountName("");
+      setNewAccountBroker("");
+      setNewAccountType("");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create account");
+    } finally {
+      setCreatingAccount(false);
+    }
+  }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -85,6 +146,10 @@ export function CsvImportForm({
   async function handleImport(e: React.FormEvent) {
     e.preventDefault();
     if (!csvText) return;
+    if (!accountId) {
+      alert("Choose or create a trading account before importing.");
+      return;
+    }
     setLoading(true);
     setResult(null);
     try {
@@ -93,7 +158,8 @@ export function CsvImportForm({
         mapping,
         orgId || null,
         preset,
-        accountId || null
+        accountId || null,
+        importStrategy || null
       );
       setResult(res);
     } catch (err) {
@@ -107,10 +173,106 @@ export function CsvImportForm({
     }
   }
 
+  async function handlePostImportStrategy() {
+    if (!result?.jobId || !postImportStrategy) return;
+    setLoading(true);
+    try {
+      const { updated } = await bulkAssignStrategyByImportJob(
+        result.jobId,
+        postImportStrategy
+      );
+      alert(`Strategy applied to ${updated} trades.`);
+      setPostImportStrategy("");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to assign strategy");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const activeGuide = EXPORT_GUIDES[preset === "auto" && detectedLabel ? "auto" : preset];
+  const selectedAccountName = accountOptions.find((a) => a.id === accountId)?.name;
 
   return (
     <form onSubmit={handleImport} className="card p-6 space-y-5 max-w-2xl">
+      <div className="p-4 rounded-lg border border-primary/30 bg-primary/5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-medium text-sm">Trading account</h2>
+            <p className="text-xs text-muted mt-0.5">
+              Every import is assigned to an account so you can filter on the dashboard.
+            </p>
+          </div>
+          {accountOptions.length > 0 && (
+            <button
+              type="button"
+              className="text-xs text-primary hover:underline"
+              onClick={() => setShowCreateAccount((v) => !v)}
+            >
+              {showCreateAccount ? "Cancel" : "+ New account"}
+            </button>
+          )}
+        </div>
+
+        {showCreateAccount && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg border border-border/60 bg-background/40">
+            <input
+              className="input"
+              placeholder="Account name *"
+              value={newAccountName}
+              onChange={(e) => setNewAccountName(e.target.value)}
+            />
+            <input
+              className="input"
+              placeholder="Broker (optional)"
+              value={newAccountBroker}
+              onChange={(e) => setNewAccountBroker(e.target.value)}
+            />
+            <select
+              className="input"
+              value={newAccountType}
+              onChange={(e) => setNewAccountType(e.target.value)}
+            >
+              <option value="">Type —</option>
+              <option value="eval">Eval</option>
+              <option value="funded">Funded</option>
+              <option value="personal">Personal</option>
+            </select>
+            <button
+              type="button"
+              className="btn btn-secondary text-sm"
+              disabled={creatingAccount}
+              onClick={handleCreateAccountClick}
+            >
+              {creatingAccount ? "Creating..." : "Create account"}
+            </button>
+          </div>
+        )}
+
+        {accountOptions.length > 0 ? (
+          <select
+            className="input"
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+            required
+          >
+            <option value="">Select account…</option>
+            {accountOptions.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+                {a.is_default ? " (default)" : ""}
+              </option>
+            ))}
+          </select>
+        ) : (
+          !showCreateAccount && (
+            <p className="text-sm text-muted">
+              Create an account above before importing.
+            </p>
+          )
+        )}
+      </div>
+
       <div>
         <label className="label">Broker / file type</label>
         <select
@@ -129,6 +291,23 @@ export function CsvImportForm({
       </div>
 
       <div>
+        <label className="label">Strategy for this import (optional)</label>
+        <select
+          className="input"
+          value={importStrategy}
+          onChange={(e) => setImportStrategy(e.target.value)}
+        >
+          <option value="">Don&apos;t set — use file column if present</option>
+          {DEFAULT_STRATEGIES.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+        <p className="text-xs text-muted mt-1">
+          Applies the same strategy to every trade in this CSV import.
+        </p>
+      </div>
+
+      <div>
         <label className="label">Upload CSV file</label>
         <input
           type="file"
@@ -137,25 +316,6 @@ export function CsvImportForm({
           className="text-sm text-muted w-full"
         />
       </div>
-
-      {accountOptions.length > 0 && (
-        <div>
-          <label className="label">Assign to trading account</label>
-          <select
-            className="input"
-            value={accountId}
-            onChange={(e) => setAccountId(e.target.value)}
-          >
-            <option value="">No account</option>
-            {accountOptions.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
-          <p className="text-xs text-muted mt-1">
-            Imports will be tagged to this account for filtering on the dashboard.
-          </p>
-        </div>
-      )}
 
       {orgOptions.length > 0 && (
         <div>
@@ -196,13 +356,48 @@ export function CsvImportForm({
 
       {result && (
         <div
-          className={`text-sm rounded-md p-3 border ${
+          className={`text-sm rounded-md p-3 border space-y-3 ${
             result.imported > 0
               ? "border-success/30 bg-success/10"
               : "border-danger/30 bg-danger/10"
           }`}
         >
-          <p>Imported: {result.imported} | Skipped: {result.skipped}</p>
+          <p>
+            Imported: {result.imported} | Skipped: {result.skipped}
+            {selectedAccountName && (
+              <span className="block text-xs text-muted mt-1">
+                Assigned to account: {selectedAccountName}
+              </span>
+            )}
+          </p>
+          {result.imported > 0 && (
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="flex-1 min-w-[200px]">
+                <label className="label text-xs">Or assign strategy after import</label>
+                <select
+                  className="input"
+                  value={postImportStrategy}
+                  onChange={(e) => setPostImportStrategy(e.target.value)}
+                >
+                  <option value="">Choose strategy…</option>
+                  {DEFAULT_STRATEGIES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm"
+                disabled={!postImportStrategy || loading}
+                onClick={handlePostImportStrategy}
+              >
+                Apply to import
+              </button>
+              <Link href="/dashboard" className="btn btn-primary text-sm">
+                View on dashboard
+              </Link>
+            </div>
+          )}
           {result.errors.length > 0 && (
             <ul className="mt-2 list-disc pl-4 text-muted">
               {result.errors.slice(0, 8).map((err, i) => (
@@ -213,7 +408,11 @@ export function CsvImportForm({
         </div>
       )}
 
-      <button type="submit" className="btn btn-primary" disabled={!csvText || loading}>
+      <button
+        type="submit"
+        className="btn btn-primary"
+        disabled={!csvText || loading || !accountId}
+      >
         {loading ? "Importing..." : "Import trades"}
       </button>
     </form>

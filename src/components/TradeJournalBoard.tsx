@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import {
+  bulkAssignStrategy,
   createTradingAccount,
   deleteTradeScreenshot,
   updateTradeJournal,
@@ -33,6 +34,8 @@ export function TradeJournalBoard({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAccountForm, setShowAccountForm] = useState(false);
+  const [selectedTradeIds, setSelectedTradeIds] = useState<string[]>([]);
+  const [bulkStrategy, setBulkStrategy] = useState("");
   const [pending, startTransition] = useTransition();
 
   const filtered = useMemo(() => {
@@ -161,7 +164,44 @@ export function TradeJournalBoard({
 
   async function handleDeleteTrade(tradeId: string) {
     setTrades((prev) => prev.filter((t) => t.id !== tradeId));
+    setSelectedTradeIds((prev) => prev.filter((id) => id !== tradeId));
     if (expandedId === tradeId) setExpandedId(null);
+  }
+
+  function toggleTradeSelection(tradeId: string) {
+    setSelectedTradeIds((prev) =>
+      prev.includes(tradeId)
+        ? prev.filter((id) => id !== tradeId)
+        : [...prev, tradeId]
+    );
+  }
+
+  function toggleSelectAllVisible() {
+    const visibleIds = filtered.map((t) => t.id);
+    const allSelected = visibleIds.every((id) => selectedTradeIds.includes(id));
+    if (allSelected) {
+      setSelectedTradeIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+    } else {
+      setSelectedTradeIds((prev) => [...new Set([...prev, ...visibleIds])]);
+    }
+  }
+
+  async function handleBulkStrategy(applyTo: "selected" | "visible") {
+    const ids =
+      applyTo === "selected"
+        ? selectedTradeIds
+        : filtered.map((t) => t.id);
+    if (!bulkStrategy || ids.length === 0) return;
+
+    startTransition(async () => {
+      await bulkAssignStrategy(ids, bulkStrategy);
+      setTrades((prev) =>
+        prev.map((t) =>
+          ids.includes(t.id) ? { ...t, setup_tag: bulkStrategy } : t
+        )
+      );
+      setSelectedTradeIds([]);
+    });
   }
 
   return (
@@ -265,7 +305,20 @@ export function TradeJournalBoard({
 
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex flex-wrap gap-3 justify-between items-center">
-          <h2 className="font-medium">Trade journal</h2>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-muted cursor-pointer">
+              <input
+                type="checkbox"
+                checked={
+                  filtered.length > 0 &&
+                  filtered.every((t) => selectedTradeIds.includes(t.id))
+                }
+                onChange={toggleSelectAllVisible}
+              />
+              Select visible
+            </label>
+            <h2 className="font-medium">Trade journal</h2>
+          </div>
           <div className="flex flex-wrap gap-2 text-xs">
             {(
               [
@@ -292,6 +345,39 @@ export function TradeJournalBoard({
           </div>
         </div>
 
+        {(selectedTradeIds.length > 0 || filtered.length > 0) && (
+          <div className="px-4 py-2 border-b border-border/50 bg-background/30 flex flex-wrap gap-2 items-center text-sm">
+            <select
+              className="input max-w-[180px] text-sm py-1.5"
+              value={bulkStrategy}
+              onChange={(e) => setBulkStrategy(e.target.value)}
+            >
+              <option value="">Bulk strategy…</option>
+              {DEFAULT_STRATEGIES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            {selectedTradeIds.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-secondary text-xs py-1.5"
+                disabled={!bulkStrategy || pending}
+                onClick={() => handleBulkStrategy("selected")}
+              >
+                Apply to {selectedTradeIds.length} selected
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-secondary text-xs py-1.5"
+              disabled={!bulkStrategy || pending || filtered.length === 0}
+              onClick={() => handleBulkStrategy("visible")}
+            >
+              Apply to all visible ({filtered.length})
+            </button>
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <p className="p-6 text-sm text-muted">
             No trades match this filter.{" "}
@@ -310,6 +396,8 @@ export function TradeJournalBoard({
               <TradeJournalRow
                 key={trade.id}
                 trade={trade}
+                selected={selectedTradeIds.includes(trade.id)}
+                onSelectToggle={() => toggleTradeSelection(trade.id)}
                 expanded={expandedId === trade.id}
                 pending={pending}
                 onToggle={() =>
@@ -332,6 +420,8 @@ export function TradeJournalBoard({
 
 function TradeJournalRow({
   trade,
+  selected,
+  onSelectToggle,
   expanded,
   pending,
   onToggle,
@@ -341,6 +431,8 @@ function TradeJournalRow({
   onDeleted,
 }: {
   trade: Trade;
+  selected: boolean;
+  onSelectToggle: () => void;
   expanded: boolean;
   pending: boolean;
   onToggle: () => void;
@@ -368,9 +460,17 @@ function TradeJournalRow({
 
   return (
     <div className="p-4 hover:bg-background/30 transition-colors">
+      <div className="flex gap-3 items-start">
+        <input
+          type="checkbox"
+          className="mt-2 shrink-0"
+          checked={selected}
+          onChange={onSelectToggle}
+          onClick={(e) => e.stopPropagation()}
+        />
       <button
         type="button"
-        className="w-full text-left"
+        className="flex-1 min-w-0 text-left"
         onClick={onToggle}
       >
         <div className="flex flex-wrap gap-3 items-start justify-between">
@@ -417,6 +517,7 @@ function TradeJournalRow({
           </div>
         </div>
       </button>
+      </div>
 
       {expanded && (
         <div className="mt-4 pl-0 sm:pl-[4.75rem] space-y-4 border-t border-border/40 pt-4">

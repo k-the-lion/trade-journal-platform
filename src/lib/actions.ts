@@ -392,12 +392,57 @@ export async function updatePlaybook(
   revalidatePath("/coach/playbook");
 }
 
+export async function bulkAssignStrategy(tradeIds: string[], strategy: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+  if (!tradeIds.length) throw new Error("No trades selected");
+  if (!strategy.trim()) throw new Error("Choose a strategy");
+
+  const { error } = await supabase
+    .from("trades")
+    .update({ setup_tag: strategy.trim() })
+    .eq("user_id", profile.id)
+    .in("id", tradeIds);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/trades");
+  revalidatePath("/reports");
+
+  return { updated: tradeIds.length };
+}
+
+export async function bulkAssignStrategyByImportJob(
+  importJobId: string,
+  strategy: string
+) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+  if (!strategy.trim()) throw new Error("Choose a strategy");
+
+  const { data: trades, error: fetchError } = await supabase
+    .from("trades")
+    .select("id")
+    .eq("user_id", profile.id)
+    .eq("import_job_id", importJobId);
+
+  if (fetchError) throw new Error(fetchError.message);
+  const ids = (trades ?? []).map((t) => t.id);
+  if (!ids.length) throw new Error("No trades found for this import");
+
+  return bulkAssignStrategy(ids, strategy);
+}
+
 export async function importCsvTrades(
   csvText: string,
   mapping: CsvColumnMapping,
   orgId?: string | null,
   preset: ImportPreset = "auto",
-  accountId?: string | null
+  accountId?: string | null,
+  defaultSetupTag?: string | null
 ) {
   const supabase = await createClient();
   const profile = await getProfile();
@@ -444,6 +489,10 @@ export async function importCsvTrades(
 
   for (const row of result.rows) {
     const tradeInput = normalizedToTradeInput(row, tradeSource, row.external_id);
+    const setupTag = defaultSetupTag?.trim()
+      ? defaultSetupTag.trim()
+      : tradeInput.setup_tag;
+
     const { error } = await supabase.from("trades").upsert(
       {
         user_id: profile.id,
@@ -456,7 +505,7 @@ export async function importCsvTrades(
         quantity: tradeInput.quantity,
         pnl: tradeInput.pnl,
         r_multiple: tradeInput.r_multiple,
-        setup_tag: tradeInput.setup_tag,
+        setup_tag: setupTag,
         notes: tradeInput.notes,
         account_id: accountId ?? null,
         source: tradeSource,
@@ -479,7 +528,7 @@ export async function importCsvTrades(
           quantity: tradeInput.quantity,
           pnl: tradeInput.pnl,
           r_multiple: tradeInput.r_multiple,
-          setup_tag: tradeInput.setup_tag,
+          setup_tag: setupTag,
           notes: tradeInput.notes,
           account_id: accountId ?? null,
           source: tradeSource,
