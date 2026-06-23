@@ -682,21 +682,22 @@ function TradeJournalRow({
           onChange={onSelectToggle}
           onClick={(e) => e.stopPropagation()}
         />
-      <button
-        type="button"
-        className="flex-1 min-w-0 text-left"
-        onClick={onToggle}
-      >
-        <div className="flex flex-wrap gap-3 items-start justify-between">
-          <div className="flex gap-3 min-w-0 flex-1">
-            {thumb ? (
-              <TradeMediaThumb shot={thumb} size="sm" />
-            ) : (
-              <div className="w-16 h-16 rounded border border-dashed border-border flex items-center justify-center text-muted text-xs shrink-0">
-                No img
-              </div>
-            )}
-            <div className="min-w-0">
+        {thumb ? (
+          <div className="shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
+            <TradeMediaThumb shot={thumb} size="sm" interactive={false} />
+          </div>
+        ) : (
+          <div className="w-16 h-16 rounded border border-dashed border-border flex items-center justify-center text-muted text-xs shrink-0 mt-0.5">
+            No img
+          </div>
+        )}
+        <button
+          type="button"
+          className="flex-1 min-w-0 text-left"
+          onClick={onToggle}
+        >
+          <div className="flex flex-wrap gap-3 items-start justify-between">
+            <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{trade.symbol}</span>
                 <span className="text-xs capitalize text-muted">
@@ -734,12 +735,11 @@ function TradeJournalRow({
                 <p className="text-sm text-muted mt-1 line-clamp-1">{trade.notes}</p>
               )}
             </div>
-          </div>
           <div className={`text-sm font-medium shrink-0 ${pnl >= 0 ? "positive" : "negative"}`}>
             {formatCurrency(pnl)}
           </div>
         </div>
-      </button>
+        </button>
       </div>
 
       {expanded && (
