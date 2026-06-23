@@ -2,10 +2,12 @@ import { registerImportAdapter } from "./adapter";
 import { csvImportAdapter } from "./csv-adapter";
 import { topstepxImportAdapter } from "./topstepx-adapter";
 import { tradovateImportAdapter } from "./tradovate-adapter";
+import { tradingviewImportAdapter } from "./tradingview-adapter";
 
 registerImportAdapter("csv", csvImportAdapter);
 registerImportAdapter("topstepx", topstepxImportAdapter);
 registerImportAdapter("tradovate", tradovateImportAdapter);
+registerImportAdapter("tradingview", tradingviewImportAdapter);
 
 export {
   csvImportAdapter,
@@ -16,6 +18,7 @@ export {
 } from "./csv-adapter";
 export { parseTopstepXTrades, topstepxImportAdapter } from "./topstepx-adapter";
 export { parseTradovateCsv, tradovateImportAdapter } from "./tradovate-adapter";
+export { parseTradingViewCsv, tradingviewImportAdapter } from "./tradingview-adapter";
 export {
   detectImportFormat,
   presetToAdapterKey,

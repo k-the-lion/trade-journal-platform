@@ -585,6 +585,10 @@ export async function importCsvTrades(
     parseOptions.mode = "orders";
   } else if (effectivePreset === "tradovate_position") {
     parseOptions.mode = "position";
+  } else if (effectivePreset === "tradingview_orders") {
+    parseOptions.mode = "orders";
+  } else if (effectivePreset === "tradingview_balance") {
+    parseOptions.mode = "balance";
   }
 
   const result =
@@ -594,7 +598,11 @@ export async function importCsvTrades(
 
   const tradeSource: TradeSource = adapter.source;
   const jobSource: ImportSource =
-    tradeSource === "tradovate" ? "tradovate" : "csv";
+    tradeSource === "tradovate"
+      ? "tradovate"
+      : tradeSource === "tradingview"
+        ? "tradingview"
+        : "csv";
 
   const { data: job, error: jobError } = await supabase
     .from("import_jobs")
@@ -614,7 +622,21 @@ export async function importCsvTrades(
     ? await resolveStrategyFields(supabase, profile.id, defaultStrategyId)
     : null;
 
+  const { data: existingTrades } = await supabase
+    .from("trades")
+    .select("external_id")
+    .eq("user_id", profile.id)
+    .eq("source", tradeSource)
+    .not("external_id", "is", null);
+
+  const existingIds = new Set(
+    ((existingTrades ?? []) as { external_id: string }[])
+      .map((t) => t.external_id)
+      .filter(Boolean)
+  );
+
   let imported = 0;
+  let duplicatesSkipped = 0;
   const insertErrors: string[] = [...result.errors];
 
   for (const row of result.rows) {
@@ -624,56 +646,45 @@ export async function importCsvTrades(
       setup_tag: tradeInput.setup_tag,
     };
 
-    const { error } = await supabase.from("trades").upsert(
-      {
-        user_id: profile.id,
-        org_id: orgId ?? null,
-        traded_at: tradeInput.traded_at,
-        symbol: tradeInput.symbol,
-        direction: tradeInput.direction,
-        entry_price: tradeInput.entry_price,
-        exit_price: tradeInput.exit_price,
-        quantity: tradeInput.quantity,
-        pnl: tradeInput.pnl,
-        r_multiple: tradeInput.r_multiple,
-        setup_tag: strategyFields.setup_tag,
-        strategy_id: strategyFields.strategy_id,
-        notes: tradeInput.notes,
-        account_id: accountId ?? null,
-        source: tradeSource,
-        external_id: tradeInput.external_id,
-        import_job_id: job.id,
-      },
-      { onConflict: "user_id,source,external_id", ignoreDuplicates: false }
-    );
+    const externalId =
+      tradeInput.external_id ??
+      `${tradeSource}-${tradeInput.traded_at.slice(0, 19)}-${tradeInput.symbol}-${tradeInput.direction}-${tradeInput.pnl}`;
+
+    if (existingIds.has(externalId)) {
+      duplicatesSkipped++;
+      continue;
+    }
+
+    const { error } = await supabase.from("trades").insert({
+      user_id: profile.id,
+      org_id: orgId ?? null,
+      traded_at: tradeInput.traded_at,
+      symbol: tradeInput.symbol,
+      direction: tradeInput.direction,
+      entry_price: tradeInput.entry_price,
+      exit_price: tradeInput.exit_price,
+      quantity: tradeInput.quantity,
+      pnl: tradeInput.pnl,
+      r_multiple: tradeInput.r_multiple,
+      setup_tag: strategyFields.setup_tag,
+      strategy_id: strategyFields.strategy_id,
+      notes: tradeInput.notes,
+      account_id: accountId ?? null,
+      source: tradeSource,
+      external_id: externalId,
+      import_job_id: job.id,
+    });
 
     if (error) {
-      if (!tradeInput.external_id) {
-        const { error: insertErr } = await supabase.from("trades").insert({
-          user_id: profile.id,
-          org_id: orgId ?? null,
-          traded_at: tradeInput.traded_at,
-          symbol: tradeInput.symbol,
-          direction: tradeInput.direction,
-          entry_price: tradeInput.entry_price,
-          exit_price: tradeInput.exit_price,
-          quantity: tradeInput.quantity,
-          pnl: tradeInput.pnl,
-          r_multiple: tradeInput.r_multiple,
-          setup_tag: strategyFields.setup_tag,
-          strategy_id: strategyFields.strategy_id,
-          notes: tradeInput.notes,
-          account_id: accountId ?? null,
-          source: tradeSource,
-          import_job_id: job.id,
-        });
-        if (insertErr) insertErrors.push(insertErr.message);
-        else imported++;
+      if (error.code === "23505") {
+        duplicatesSkipped++;
+        existingIds.add(externalId);
       } else {
         insertErrors.push(error.message);
       }
     } else {
       imported++;
+      existingIds.add(externalId);
     }
   }
 
@@ -694,7 +705,8 @@ export async function importCsvTrades(
 
   return {
     imported,
-    skipped: result.skipped,
+    skipped: result.skipped + duplicatesSkipped,
+    duplicatesSkipped,
     errors: insertErrors,
     jobId: job.id,
   };
@@ -703,6 +715,21 @@ export async function importCsvTrades(
 export async function startNewChatSession() {
   const session = await createChatSession("New Session");
   redirect(`/chat?session=${session.id}`);
+}
+
+export async function deleteChatSession(sessionId: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("chat_sessions")
+    .delete()
+    .eq("id", sessionId)
+    .eq("user_id", profile.id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/chat");
 }
 
 export async function createChatSession(title?: string) {

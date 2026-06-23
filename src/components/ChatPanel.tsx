@@ -43,8 +43,22 @@ export function ChatPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: session.id, message: userMsg }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to get response");
+      const raw = await res.text();
+      let data: { content?: string; error?: string } = {};
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          throw new Error("Server returned an invalid response. Please try again.");
+        }
+      }
+      if (!res.ok) {
+        throw new Error(data.error || `Request failed (${res.status})`);
+      }
+      const content = data.content;
+      if (!content) {
+        throw new Error("Empty response from coach. Please try again.");
+      }
 
       setMessages((prev) => [
         ...prev,
@@ -52,7 +66,7 @@ export function ChatPanel({
           id: `temp-a-${Date.now()}`,
           session_id: session.id,
           role: "assistant",
-          content: data.content,
+          content,
           created_at: new Date().toISOString(),
         },
       ]);

@@ -55,11 +55,11 @@ export default async function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold">Import Trades</h1>
         <p className="text-muted text-sm mt-1">
-          Upload a CSV exported from TopStep X, Tradovate, or any spreadsheet.
+          Upload a CSV exported from TopStep X, Tradovate, TradingView, or any spreadsheet.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-5xl">
         <div className="card p-5 space-y-2">
           <h2 className="font-medium text-sm">TopStep X</h2>
           <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
@@ -76,6 +76,19 @@ export default async function ImportPage() {
             <li>Use <strong className="text-foreground">Position History</strong> (best — includes P&L)</li>
             <li>Or Reports → <strong className="text-foreground">Orders</strong> (not Performance)</li>
             <li>Download CSV and upload — choose Tradovate preset</li>
+          </ol>
+        </div>
+        <div className="card p-5 space-y-2">
+          <h2 className="font-medium text-sm">TradingView</h2>
+          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
+            <li>Open your broker panel in TradingView (Paper Trading or connected broker)</li>
+            <li>
+              <strong className="text-foreground">Balance History</strong> (recommended) — each row is a closed trade with P&L
+            </li>
+            <li>
+              Or <strong className="text-foreground">Order History</strong> — use the ⋯ menu to show all columns before export
+            </li>
+            <li>Upload here — choose TradingView preset or Auto-detect</li>
           </ol>
         </div>
       </div>
@@ -102,7 +115,7 @@ export default async function ImportPage() {
         </ul>
         <p className="text-xs text-muted">
           Tip: Don&apos;t edit the CSV in Excel before importing — it can break dates and numbers.
-          Re-importing the same file is safe; duplicate trades are skipped when an ID is present.
+          Re-importing the same file is safe — duplicate trades are detected automatically and skipped.
         </p>
       </div>
 

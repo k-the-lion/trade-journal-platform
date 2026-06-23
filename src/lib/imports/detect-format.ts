@@ -5,6 +5,8 @@ export type ImportPreset =
   | "topstepx"
   | "tradovate_position"
   | "tradovate_orders"
+  | "tradingview_balance"
+  | "tradingview_orders"
   | "generic";
 
 export interface DetectedFormat {
@@ -65,6 +67,34 @@ export function detectImportFormat(csvText: string): DetectedFormat {
     };
   }
 
+  // TradingView Balance History / Trading journal (round trips with P&L)
+  if (
+    (has(["Symbol"]) || has(["Ticker"])) &&
+    has(["P&L", "PnL", "Net P&L", "Profit"]) &&
+    !has(["ContractName"])
+  ) {
+    return {
+      preset: "tradingview_balance",
+      source: "csv",
+      label: "TradingView (Balance History)",
+      confidence: "high",
+    };
+  }
+
+  // TradingView Order History
+  if (
+    (has(["Symbol"]) || has(["Ticker"])) &&
+    has(["Side", "B/S", "Buy/Sell"]) &&
+    (has(["Order ID", "Order Id", "orderId"]) || has(["Status"]))
+  ) {
+    return {
+      preset: "tradingview_orders",
+      source: "csv",
+      label: "TradingView (Order History)",
+      confidence: "medium",
+    };
+  }
+
   return {
     preset: "generic",
     source: "csv",
@@ -80,6 +110,9 @@ export function presetToAdapterKey(preset: ImportPreset): string {
     case "tradovate_position":
     case "tradovate_orders":
       return "tradovate";
+    case "tradingview_balance":
+    case "tradingview_orders":
+      return "tradingview";
     default:
       return "csv";
   }

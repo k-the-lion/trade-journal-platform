@@ -34,17 +34,23 @@ const PRESET_OPTIONS: { value: ImportPreset; label: string }[] = [
   { value: "topstepx", label: "TopStep X (Trades export)" },
   { value: "tradovate_position", label: "Tradovate (Position History)" },
   { value: "tradovate_orders", label: "Tradovate (Orders / Fills)" },
+  { value: "tradingview_balance", label: "TradingView (Balance History)" },
+  { value: "tradingview_orders", label: "TradingView (Order History)" },
   { value: "generic", label: "Generic CSV / spreadsheet" },
 ];
 
 const EXPORT_GUIDES: Record<ImportPreset, string> = {
-  auto: "Upload your broker export — we'll detect TopStep X or Tradovate automatically.",
+  auto: "Upload your broker export — we'll detect TopStep X, Tradovate, or TradingView automatically.",
   topstepx:
     "TopStep X → bottom Trades tab → Export → pick date range → download CSV. Don't edit the file.",
   tradovate_position:
     "Tradovate → Accounts → gear icon → Position History → date range → Download Report. Best for P&L.",
   tradovate_orders:
     "Tradovate → Reports → Orders tab (NOT Performance) → Download CSV. Orders lack round-trip P&L.",
+  tradingview_balance:
+    "TradingView → Paper Trading / Broker panel → Balance History tab → export CSV. Best — each row is a closed trade with P&L.",
+  tradingview_orders:
+    "TradingView → Order History tab → ⋯ menu → enable all columns → export. We pair buy/sell fills into trades.",
   generic: "Any CSV with date, symbol, and P&L columns. Map columns below if needed.",
 };
 
@@ -71,6 +77,7 @@ export function CsvImportForm({
   const [result, setResult] = useState<{
     imported: number;
     skipped: number;
+    duplicatesSkipped?: number;
     errors: string[];
     jobId?: string;
   } | null>(null);
@@ -361,13 +368,19 @@ export function CsvImportForm({
       {result && (
         <div
           className={`text-sm rounded-md p-3 border space-y-3 ${
-            result.imported > 0
+            result.imported > 0 || (result.duplicatesSkipped ?? 0) > 0
               ? "border-success/30 bg-success/10"
               : "border-danger/30 bg-danger/10"
           }`}
         >
           <p>
-            Imported: {result.imported} | Skipped: {result.skipped}
+            Imported: {result.imported}
+            {(result.duplicatesSkipped ?? 0) > 0 && (
+              <> | Duplicates skipped: {result.duplicatesSkipped}</>
+            )}
+            {result.skipped - (result.duplicatesSkipped ?? 0) > 0 && (
+              <> | Rows skipped: {result.skipped - (result.duplicatesSkipped ?? 0)}</>
+            )}
             {selectedAccountName && (
               <span className="block text-xs text-muted mt-1">
                 Assigned to account: {selectedAccountName}
