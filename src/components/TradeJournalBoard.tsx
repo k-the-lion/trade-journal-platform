@@ -11,6 +11,8 @@ import {
 import { DEFAULT_STRATEGIES, moodEmoji, moodLabel } from "@/lib/constants/trade-meta";
 import { computeTradeStats, formatCurrency } from "@/lib/reports/stats";
 import { MoodPicker } from "@/components/MoodPicker";
+import { DeleteAllTradesPanel } from "@/components/DeleteAllTradesPanel";
+import { DeleteTradeButton } from "@/components/DeleteTradeButton";
 import { StatCard } from "@/components/StatCard";
 import type { Trade, TradingAccount } from "@/lib/types/database";
 
@@ -155,6 +157,11 @@ export function TradeJournalBoard({
     setAccounts((prev) => [...prev, account]);
     setShowAccountForm(false);
     e.currentTarget.reset();
+  }
+
+  async function handleDeleteTrade(tradeId: string) {
+    setTrades((prev) => prev.filter((t) => t.id !== tradeId));
+    if (expandedId === tradeId) setExpandedId(null);
   }
 
   return (
@@ -311,11 +318,14 @@ export function TradeJournalBoard({
                 onSave={handleJournalSave}
                 onUpload={(file) => handleScreenshotUpload(trade.id, file)}
                 onDeleteScreenshot={handleScreenshotDelete}
+                onDeleted={handleDeleteTrade}
               />
             ))}
           </div>
         )}
       </div>
+
+      <DeleteAllTradesPanel tradeCount={trades.length} />
     </div>
   );
 }
@@ -328,6 +338,7 @@ function TradeJournalRow({
   onSave,
   onUpload,
   onDeleteScreenshot,
+  onDeleted,
 }: {
   trade: Trade;
   expanded: boolean;
@@ -342,6 +353,7 @@ function TradeJournalRow({
   ) => void;
   onUpload: (file: File) => void;
   onDeleteScreenshot: (id: string) => void;
+  onDeleted: (tradeId: string) => void;
 }) {
   const [notes, setNotes] = useState(trade.notes ?? "");
   const [mood, setMood] = useState(trade.emotional_state ?? "");
@@ -489,7 +501,7 @@ function TradeJournalRow({
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               className="btn btn-primary text-sm"
@@ -504,6 +516,12 @@ function TradeJournalRow({
             >
               Full trade details
             </Link>
+            <DeleteTradeButton
+              tradeId={trade.id}
+              tradeLabel={`${trade.symbol} (${formatCurrency(pnl)})`}
+              onDeleted={onDeleted}
+              className="btn btn-danger text-sm ml-auto"
+            />
           </div>
         </div>
       )}

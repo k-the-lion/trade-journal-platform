@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { TradeForm } from "@/components/TradeForm";
-import { deleteTrade } from "@/lib/actions";
+import { DeleteTradeButton } from "@/components/DeleteTradeButton";
 import { formatCurrency } from "@/lib/reports/stats";
 import type { Trade } from "@/lib/types/database";
 
@@ -61,9 +61,11 @@ export default async function TradeDetailPage({
             </span>
           </h1>
         </div>
-        <form action={deleteTrade.bind(null, id)}>
-          <button type="submit" className="btn btn-danger text-sm">Delete</button>
-        </form>
+        <DeleteTradeButton
+          tradeId={id}
+          tradeLabel={`${t.symbol} (${formatCurrency(Number(t.pnl))})`}
+          redirectTo="/dashboard"
+        />
       </div>
       <TradeForm
         trade={t}

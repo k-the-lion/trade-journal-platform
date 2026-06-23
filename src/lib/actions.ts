@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import type { AccountType, TradeInput } from "@/lib/types/database";
+import { permanentlyDeleteTradesForUser } from "@/lib/trades/delete";
 import { BUCKET, tradeScreenshotPath } from "@/lib/supabase/storage";
 import { normalizedToTradeInput, getImportAdapter } from "@/lib/imports/adapter";
 import {
@@ -231,16 +232,37 @@ export async function deleteTrade(id: string) {
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
 
-  const { error } = await supabase
+  const { data: trade } = await supabase
     .from("trades")
-    .delete()
+    .select("id")
     .eq("id", id)
-    .eq("user_id", profile.id);
+    .eq("user_id", profile.id)
+    .single();
 
-  if (error) throw new Error(error.message);
+  if (!trade) throw new Error("Trade not found");
+
+  await permanentlyDeleteTradesForUser(supabase, profile.id, [id]);
+
   revalidatePath("/trades");
   revalidatePath("/dashboard");
-  redirect("/trades");
+  revalidatePath("/reports");
+}
+
+export async function deleteAllTrades() {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const deleted = await permanentlyDeleteTradesForUser(supabase, profile.id);
+
+  await supabase.from("import_jobs").delete().eq("user_id", profile.id);
+
+  revalidatePath("/trades");
+  revalidatePath("/dashboard");
+  revalidatePath("/import");
+  revalidatePath("/reports");
+
+  return { deleted };
 }
 
 export async function createOrganization(name: string) {
