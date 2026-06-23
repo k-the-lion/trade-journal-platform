@@ -1,5 +1,12 @@
 import Papa from "papaparse";
 import type { ImportAdapter, ImportAdapterResult, NormalizedTradeRow } from "./adapter";
+import {
+  findColumn,
+  parseCsvRows,
+  parseDate,
+  parseDirection,
+  parseNumber,
+} from "./csv-utils";
 
 export interface CsvColumnMapping {
   traded_at?: string;
@@ -15,7 +22,7 @@ export interface CsvColumnMapping {
   external_id?: string;
 }
 
-const DEFAULT_MAPPING: CsvColumnMapping = {
+export const DEFAULT_MAPPING: CsvColumnMapping = {
   traded_at: "Date",
   symbol: "Symbol",
   direction: "Direction",
@@ -29,22 +36,33 @@ const DEFAULT_MAPPING: CsvColumnMapping = {
   external_id: "ID",
 };
 
-function parseDirection(raw: string): "long" | "short" {
-  const v = raw?.toLowerCase().trim();
-  if (v === "short" || v === "s" || v === "sell") return "short";
-  return "long";
-}
+export function buildMappingFromHeaders(
+  headers: string[],
+  base: CsvColumnMapping = DEFAULT_MAPPING
+): CsvColumnMapping {
+  const auto: CsvColumnMapping = { ...base };
+  const fields = Object.keys(base) as (keyof CsvColumnMapping)[];
 
-function parseNumber(raw: string | undefined): number | null {
-  if (raw === undefined || raw === "") return null;
-  const n = parseFloat(String(raw).replace(/[$,]/g, ""));
-  return Number.isFinite(n) ? n : null;
-}
+  const aliases: Record<keyof CsvColumnMapping, string[]> = {
+    traded_at: ["Date", "Time", "Fill Time", "Timestamp", "Exit Time"],
+    symbol: ["Symbol", "Contract", "Product", "Instrument"],
+    direction: ["Direction", "Side", "B/S", "Buy/Sell"],
+    entry_price: ["Entry", "Entry Price", "Avg Entry", "Open Price"],
+    exit_price: ["Exit", "Exit Price", "Avg Exit", "Close Price"],
+    quantity: ["Quantity", "Qty", "Size", "filledQty", "Filled Qty"],
+    pnl: ["PnL", "P&L", "Net P&L", "Realized P&L", "Profit/Loss"],
+    r_multiple: ["R", "R-Multiple", "R Multiple"],
+    setup_tag: ["Setup", "Strategy", "Tag"],
+    notes: ["Notes", "Comment", "Description"],
+    external_id: ["ID", "Id", "orderId", "Order ID", "Trade ID"],
+  };
 
-function parseDate(raw: string): string | null {
-  const d = new Date(raw);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
+  for (const field of fields) {
+    const match = findColumn(headers, aliases[field] ?? []);
+    if (match) auto[field] = match;
+  }
+
+  return auto;
 }
 
 export function parseCsvTrades(
@@ -54,16 +72,12 @@ export function parseCsvTrades(
   const parsed = Papa.parse<Record<string, string>>(csvText, {
     header: true,
     skipEmptyLines: true,
+    transformHeader: (h) => h.trim(),
   });
 
-  const errors: string[] = [];
+  const errors: string[] = parsed.errors.map((e) => `Row ${e.row}: ${e.message}`);
   const rows: NormalizedTradeRow[] = [];
   let skipped = 0;
-
-  if (parsed.errors.length) {
-    errors.push(...parsed.errors.map((e) => `Row ${e.row}: ${e.message}`));
-  }
-
   const m = { ...DEFAULT_MAPPING, ...mapping };
 
   parsed.data.forEach((row, index) => {
@@ -71,7 +85,7 @@ export function parseCsvTrades(
     const symbolCol = m.symbol && row[m.symbol];
     const pnlCol = m.pnl && row[m.pnl];
 
-    if (!dateCol || !symbolCol || pnlCol === undefined) {
+    if (!dateCol || !symbolCol || pnlCol === undefined || pnlCol === "") {
       skipped++;
       errors.push(`Row ${index + 2}: missing required date, symbol, or PnL`);
       return;
@@ -96,7 +110,7 @@ export function parseCsvTrades(
 
     rows.push({
       traded_at,
-      symbol: symbolCol.trim(),
+      symbol: symbolCol.trim().toUpperCase(),
       direction: parseDirection(directionRaw ?? "long"),
       entry_price: m.entry_price ? parseNumber(row[m.entry_price]) : null,
       exit_price: m.exit_price ? parseNumber(row[m.exit_price]) : null,
@@ -114,7 +128,7 @@ export function parseCsvTrades(
 
 export const csvImportAdapter: ImportAdapter = {
   source: "csv",
-  name: "CSV Import",
+  name: "Generic CSV",
   supportedFields: Object.values(DEFAULT_MAPPING).filter(Boolean) as string[],
   parse(input, options) {
     const text = typeof input === "string" ? input : "";

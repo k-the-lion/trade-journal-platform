@@ -53,33 +53,20 @@ export function normalizedToTradeInput(
   };
 }
 
-/** Registry for future broker adapters */
 const adapters = new Map<string, ImportAdapter>();
 
-export function registerImportAdapter(adapter: ImportAdapter) {
-  adapters.set(adapter.source, adapter);
+export function registerImportAdapter(key: string, adapter: ImportAdapter) {
+  adapters.set(key, adapter);
 }
 
-export function getImportAdapter(source: string): ImportAdapter | undefined {
-  return adapters.get(source);
+export function getImportAdapter(key: string): ImportAdapter | undefined {
+  return adapters.get(key);
 }
 
 export function listImportAdapters(): ImportAdapter[] {
-  return [...adapters.values()];
+  return [...new Set(adapters.values())];
 }
 
-/** Stub for future Tradovate API sync */
-export const tradovateAdapterStub: ImportAdapter = {
-  source: "tradovate",
-  name: "Tradovate (coming soon)",
-  supportedFields: ["orderId", "symbol", "fillTime", "pnl"],
-  parse() {
-    return {
-      rows: [],
-      errors: ["Tradovate API sync is not yet implemented. Use CSV import for now."],
-      skipped: 0,
-    };
-  },
-};
-
-registerImportAdapter(tradovateAdapterStub);
+export function listImportAdapterKeys(): string[] {
+  return [...adapters.keys()];
+}

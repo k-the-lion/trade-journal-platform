@@ -4,8 +4,15 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import type { TradeInput } from "@/lib/types/database";
-import { normalizedToTradeInput } from "@/lib/imports/adapter";
-import { parseCsvTrades, type CsvColumnMapping } from "@/lib/imports/csv-adapter";
+import { normalizedToTradeInput, getImportAdapter } from "@/lib/imports/adapter";
+import {
+  parseCsvTrades,
+  type CsvColumnMapping,
+  detectImportFormat,
+  presetToAdapterKey,
+  type ImportPreset,
+} from "@/lib/imports";
+import type { ImportSource, TradeSource } from "@/lib/types/database";
 
 export async function signOut() {
   const supabase = await createClient();
@@ -220,20 +227,41 @@ export async function updatePlaybook(
 export async function importCsvTrades(
   csvText: string,
   mapping: CsvColumnMapping,
-  orgId?: string | null
+  orgId?: string | null,
+  preset: ImportPreset = "auto"
 ) {
   const supabase = await createClient();
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
 
-  const result = parseCsvTrades(csvText, mapping);
+  const detected = preset === "auto" ? detectImportFormat(csvText) : null;
+  const effectivePreset = preset === "auto" ? detected!.preset : preset;
+  const adapterKey = presetToAdapterKey(effectivePreset);
+
+  const adapter = getImportAdapter(adapterKey) ?? getImportAdapter("csv")!;
+  const parseOptions: Record<string, unknown> = { mapping };
+
+  if (effectivePreset === "tradovate_orders") {
+    parseOptions.mode = "orders";
+  } else if (effectivePreset === "tradovate_position") {
+    parseOptions.mode = "position";
+  }
+
+  const result =
+    adapterKey === "csv"
+      ? parseCsvTrades(csvText, mapping)
+      : adapter.parse(csvText, parseOptions);
+
+  const tradeSource: TradeSource = adapter.source;
+  const jobSource: ImportSource =
+    tradeSource === "tradovate" ? "tradovate" : "csv";
 
   const { data: job, error: jobError } = await supabase
     .from("import_jobs")
     .insert({
       user_id: profile.id,
       org_id: orgId ?? null,
-      source: "csv",
+      source: jobSource,
       status: "processing",
       row_count: result.rows.length,
     })
@@ -246,7 +274,7 @@ export async function importCsvTrades(
   const insertErrors: string[] = [...result.errors];
 
   for (const row of result.rows) {
-    const tradeInput = normalizedToTradeInput(row, "csv", row.external_id);
+    const tradeInput = normalizedToTradeInput(row, tradeSource, row.external_id);
     const { error } = await supabase.from("trades").upsert(
       {
         user_id: profile.id,
@@ -261,7 +289,7 @@ export async function importCsvTrades(
         r_multiple: tradeInput.r_multiple,
         setup_tag: tradeInput.setup_tag,
         notes: tradeInput.notes,
-        source: "csv",
+        source: tradeSource,
         external_id: tradeInput.external_id,
         import_job_id: job.id,
       },
@@ -283,7 +311,7 @@ export async function importCsvTrades(
           r_multiple: tradeInput.r_multiple,
           setup_tag: tradeInput.setup_tag,
           notes: tradeInput.notes,
-          source: "csv",
+          source: tradeSource,
           import_job_id: job.id,
         });
         if (insertErr) insertErrors.push(insertErr.message);

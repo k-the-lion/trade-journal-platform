@@ -35,26 +35,51 @@ export default async function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold">Import Trades</h1>
         <p className="text-muted text-sm mt-1">
-          Upload a CSV with flexible column mapping. Broker API sync coming soon.
+          Upload a CSV exported from TopStep X, Tradovate, or any spreadsheet.
         </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl">
+        <div className="card p-5 space-y-2">
+          <h2 className="font-medium text-sm">TopStep X</h2>
+          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
+            <li>Open TopStep X and select your account</li>
+            <li>Go to the <strong className="text-foreground">Trades</strong> tab at the bottom</li>
+            <li>Click <strong className="text-foreground">Export</strong> and choose your date range</li>
+            <li>Upload the CSV here — choose &quot;TopStep X&quot; or Auto-detect</li>
+          </ol>
+        </div>
+        <div className="card p-5 space-y-2">
+          <h2 className="font-medium text-sm">Tradovate</h2>
+          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
+            <li>Tradovate → <strong className="text-foreground">Accounts</strong> → gear icon</li>
+            <li>Use <strong className="text-foreground">Position History</strong> (best — includes P&L)</li>
+            <li>Or Reports → <strong className="text-foreground">Orders</strong> (not Performance)</li>
+            <li>Download CSV and upload — choose Tradovate preset</li>
+          </ol>
+        </div>
       </div>
 
       <CsvImportForm orgOptions={orgOptions} />
 
       <div className="card p-6 max-w-2xl space-y-3">
-        <h2 className="font-medium text-sm">Available import sources</h2>
+        <h2 className="font-medium text-sm">Supported formats</h2>
         <ul className="text-sm text-muted space-y-2">
           {adapters.map((a) => (
-            <li key={a.source}>
-              <span className="text-foreground capitalize">{a.name}</span>
+            <li key={a.name}>
+              <span className="text-foreground">{a.name}</span>
               {a.supportedFields && (
                 <span className="block text-xs mt-0.5">
-                  Fields: {a.supportedFields.join(", ")}
+                  Columns: {a.supportedFields.join(", ")}
                 </span>
               )}
             </li>
           ))}
         </ul>
+        <p className="text-xs text-muted">
+          Tip: Don&apos;t edit the CSV in Excel before importing — it can break dates and numbers.
+          Re-importing the same file is safe; duplicate trades are skipped when an ID is present.
+        </p>
       </div>
 
       {(jobs ?? []).length > 0 && (
