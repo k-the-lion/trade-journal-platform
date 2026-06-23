@@ -19,13 +19,13 @@ export function detectImportFormat(csvText: string): DetectedFormat {
 
   const has = (aliases: string[]) => Boolean(findColumn(headers, aliases));
 
-  // TopStep X Trades tab: Symbol, Size, Time, Entry Price, Exit Price, P&L, Fees
+  // TopStep X — Trades tab (Symbol, Time) or API export (ContractName, EnteredAt)
   if (
-    has(["Symbol"]) &&
-    has(["Entry Price", "Entry"]) &&
-    has(["Exit Price", "Exit"]) &&
+    (has(["Symbol"]) || has(["ContractName"])) &&
+    (has(["Entry Price", "Entry"]) || has(["EntryPrice"])) &&
+    (has(["Exit Price", "Exit"]) || has(["ExitPrice"])) &&
     has(["P&L", "PnL", "Net P&L", "Total P&L"]) &&
-    has(["Time", "Exit Time", "Entry Time"])
+    (has(["Time", "ExitedAt", "EnteredAt", "Exit Time", "Entry Time"]))
   ) {
     return {
       preset: "topstepx",

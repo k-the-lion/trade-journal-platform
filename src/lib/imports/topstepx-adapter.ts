@@ -15,16 +15,59 @@ export function parseTopstepXTrades(csvText: string): ImportAdapterResult {
   let skipped = 0;
 
   const col = {
-    time: findColumn(headers, ["Time", "Exit Time", "Entry Time", "Date/Time", "Date"]),
-    symbol: findColumn(headers, ["Symbol", "Contract", "Product"]),
+    time: findColumn(headers, [
+      "Time",
+      "ExitedAt",
+      "Exit Time",
+      "EnteredAt",
+      "Entry Time",
+      "Date/Time",
+      "Date",
+    ]),
+    symbol: findColumn(headers, [
+      "Symbol",
+      "ContractName",
+      "Contract",
+      "Product",
+      "Instrument",
+    ]),
     size: findColumn(headers, ["Size", "Qty", "Quantity", "Contracts"]),
-    entry: findColumn(headers, ["Entry Price", "Entry", "Avg Entry"]),
-    exit: findColumn(headers, ["Exit Price", "Exit", "Avg Exit"]),
-    pnl: findColumn(headers, ["P&L", "PnL", "Net P&L", "Total P&L", "Profit/Loss", "PL"]),
+    entry: findColumn(headers, [
+      "Entry Price",
+      "EntryPrice",
+      "Entry",
+      "Avg Entry",
+    ]),
+    exit: findColumn(headers, [
+      "Exit Price",
+      "ExitPrice",
+      "Exit",
+      "Avg Exit",
+    ]),
+    pnl: findColumn(headers, [
+      "P&L",
+      "PnL",
+      "Net P&L",
+      "Total P&L",
+      "Profit/Loss",
+      "PL",
+    ]),
     fees: findColumn(headers, ["Fees", "Commission", "Commissions"]),
-    direction: findColumn(headers, ["Direction", "Side", "B/S", "Buy/Sell"]),
-    id: findColumn(headers, ["Trade ID", "Id", "ID", "Order ID", "Position ID"]),
-    notes: findColumn(headers, ["Notes", "Comment", "Description"]),
+    direction: findColumn(headers, [
+      "Direction",
+      "Type",
+      "Side",
+      "B/S",
+      "Buy/Sell",
+    ]),
+    id: findColumn(headers, [
+      "Id",
+      "ID",
+      "Trade ID",
+      "Order ID",
+      "Position ID",
+    ]),
+    notes: findColumn(headers, ["Notes", "Comment", "Description", "TradeDuration"]),
   };
 
   if (!col.symbol || !col.pnl) {
@@ -53,11 +96,15 @@ export function parseTopstepXTrades(csvText: string): ImportAdapterResult {
       return;
     }
 
-    const fees = col.fees ? parseNumber(row[col.fees]) ?? 0 : 0;
-    const netPnl = grossPnl - Math.abs(fees);
+    // TopStep X PnL column is already net of fees in current exports
+    const netPnl = grossPnl;
 
     const timeRaw = col.time ? row[col.time] : undefined;
-    const traded_at = parseDate(timeRaw);
+    // Prefer exit time when both EnteredAt and ExitedAt exist — use ExitedAt column first in findColumn order
+    const exitedAtCol = findColumn(headers, ["ExitedAt", "Exit Time"]);
+    const traded_at = parseDate(
+      exitedAtCol ? row[exitedAtCol] : timeRaw
+    );
     if (!traded_at) {
       skipped++;
       errors.push(`Row ${index + 2}: invalid or missing time`);
@@ -92,7 +139,22 @@ export function parseTopstepXTrades(csvText: string): ImportAdapterResult {
 export const topstepxImportAdapter: ImportAdapter = {
   source: "other",
   name: "TopStep X CSV",
-  supportedFields: ["Symbol", "Size", "Time", "Entry Price", "Exit Price", "P&L", "Fees"],
+  supportedFields: [
+    "Symbol",
+    "ContractName",
+    "Size",
+    "Time",
+    "EnteredAt",
+    "ExitedAt",
+    "Entry Price",
+    "EntryPrice",
+    "Exit Price",
+    "ExitPrice",
+    "P&L",
+    "Fees",
+    "Type",
+    "Id",
+  ],
   parse(input) {
     const text = typeof input === "string" ? input : "";
     return parseTopstepXTrades(text);

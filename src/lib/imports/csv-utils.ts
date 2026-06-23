@@ -43,13 +43,13 @@ export function parseCsvRows(csvText: string): {
 function hasTradeColumns(headers: string[]): boolean {
   const lower = headers.map((h) => h.toLowerCase());
   const hasSymbol = lower.some((h) =>
-    ["symbol", "contract", "product", "instrument"].includes(h)
+    ["symbol", "contract", "contractname", "product", "instrument"].includes(h)
   );
   const hasPnl = lower.some((h) =>
     h.includes("p&l") || h.includes("pnl") || h.includes("profit") || h === "pl"
   );
   const hasTime = lower.some((h) =>
-    ["time", "date", "fill time", "timestamp", "exit time", "entry time"].some((t) =>
+    ["time", "date", "fill time", "timestamp", "exit time", "entry time", "enteredat", "exitedat"].some((t) =>
       h.includes(t)
     )
   );
@@ -78,6 +78,7 @@ export function parseDirection(raw: string | undefined): "long" | "short" {
   const v = raw?.toLowerCase().trim() ?? "";
   if (["short", "s", "sell", "sold"].includes(v)) return "short";
   if (v === "b" || v === "buy" || v === "bot" || v === "bought") return "long";
+  if (v === "long") return "long";
   if (v.includes("sell")) return "short";
   if (v.includes("buy")) return "long";
   return "long";
@@ -96,6 +97,27 @@ export function parseNumber(raw: string | undefined): number | null {
 export function parseDate(raw: string | undefined): string | null {
   if (!raw?.trim()) return null;
   const value = raw.trim();
+
+  // TopStep X: 06/11/2026 11:06:02 -06:00
+  const tzMatch = value.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}:\d{2}:\d{2})(?:\.\d+)?\s*([+-]\d{2}:\d{2})$/
+  );
+  if (tzMatch) {
+    const [, mm, dd, yyyy, time, tz] = tzMatch;
+    const iso = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}T${time}${tz}`;
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+
+  // MM/DD/YYYY HH:mm:ss without timezone
+  const usMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}:\d{2}:\d{2})/);
+  if (usMatch) {
+    const [, mm, dd, yyyy, time] = usMatch;
+    const iso = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}T${time}`;
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+
   // Dot-separated dates: 06.18.2026
   const dotMatch = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(.+))?$/);
   if (dotMatch) {
@@ -104,6 +126,7 @@ export function parseDate(raw: string | undefined): string | null {
     const d = new Date(iso);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
+
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
