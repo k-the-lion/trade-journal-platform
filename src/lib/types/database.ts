@@ -74,11 +74,20 @@ export interface TradingAccount {
 export interface TradeScreenshot {
   id: string;
   trade_id: string;
-  storage_path: string;
+  storage_path: string | null;
+  link_url: string | null;
   caption: string | null;
   sort_order: number;
   created_at: string;
   signed_url?: string;
+}
+
+export interface TradingTagPreset {
+  id: string;
+  user_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface TradingStrategy {
@@ -215,8 +224,13 @@ export interface Database {
       >;
       trade_screenshots: TableDef<
         TradeScreenshot,
-        Omit<TradeScreenshot, "id" | "created_at">,
+        Omit<TradeScreenshot, "id" | "created_at" | "signed_url">,
         Partial<TradeScreenshot>
+      >;
+      trading_tag_presets: TableDef<
+        TradingTagPreset,
+        Partial<TradingTagPreset> & { user_id: string; name: string },
+        Partial<TradingTagPreset>
       >;
       import_jobs: TableDef<ImportJob, Partial<ImportJob> & { user_id: string; source: ImportSource }, Partial<ImportJob>>;
       chat_sessions: TableDef<ChatSession, Partial<ChatSession> & { user_id: string }, Partial<ChatSession>>;

@@ -67,7 +67,7 @@ export function parseTopstepXTrades(csvText: string): ImportAdapterResult {
       "Order ID",
       "Position ID",
     ]),
-    notes: findColumn(headers, ["Notes", "Comment", "Description", "TradeDuration"]),
+    notes: findColumn(headers, ["Notes", "Comment", "Description"]),
   };
 
   if (!col.symbol || !col.pnl) {

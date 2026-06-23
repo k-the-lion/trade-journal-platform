@@ -112,7 +112,7 @@ function parseTradovatePositionHistory(
       quantity: Math.abs(quantity),
       pnl,
       setup_tag: "Tradovate",
-      notes: "Imported from Tradovate Position History (gross P&L — fees may not be included)",
+      notes: null,
       external_id: col.id ? row[col.id]?.trim() || null : null,
     });
   });
@@ -184,8 +184,7 @@ function parseTradovateOrders(
       quantity: Math.abs(qty),
       pnl: 0,
       setup_tag: "Tradovate Order",
-      notes:
-        "Single order/fill from Tradovate Orders export — P&L is 0. Use Position History for matched trades with P&L.",
+      notes: null,
       external_id: external_id ? `order-${external_id}` : null,
     });
   });

@@ -120,7 +120,7 @@ function parseBalanceOrJournalRows(
       quantity: Math.abs(qty),
       pnl,
       setup_tag: "TradingView",
-      notes: "Imported from TradingView",
+      notes: null,
       external_id,
     });
   });
@@ -212,7 +212,7 @@ function parseListOfTrades(
       quantity: Math.abs(qty),
       pnl,
       setup_tag: "TradingView",
-      notes: "Imported from TradingView List of Trades",
+      notes: null,
       external_id: `tv-trade-${tradeNum}`,
     });
   });
@@ -345,7 +345,7 @@ function parseOrderHistory(
         quantity: entry.qty,
         pnl,
         setup_tag: "TradingView",
-        notes: "Paired from TradingView Order History fills",
+        notes: null,
         external_id,
       });
       stack.pop();

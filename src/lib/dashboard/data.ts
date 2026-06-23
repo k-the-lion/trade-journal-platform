@@ -1,11 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { BUCKET } from "@/lib/supabase/storage";
-import type { Trade, TradeScreenshot, TradingAccount, TradingStrategy } from "@/lib/types/database";
+import type { Trade, TradeScreenshot, TradingAccount, TradingStrategy, TradingTagPreset } from "@/lib/types/database";
 
 export async function getDashboardData(userId: string) {
   const supabase = await createClient();
 
-  const [{ data: accounts }, { data: strategies }, { data: trades }] = await Promise.all([
+  const [{ data: accounts }, { data: strategies }, { data: tagPresets }, { data: trades }] = await Promise.all([
     supabase
       .from("trading_accounts")
       .select("*")
@@ -17,6 +17,12 @@ export async function getDashboardData(userId: string) {
       .select("*")
       .eq("user_id", userId)
       .eq("is_active", true)
+      .order("sort_order")
+      .order("name"),
+    supabase
+      .from("trading_tag_presets")
+      .select("*")
+      .eq("user_id", userId)
       .order("sort_order")
       .order("name"),
     supabase
@@ -35,13 +41,16 @@ export async function getDashboardData(userId: string) {
     ...t,
     trade_screenshots: (t.trade_screenshots ?? []).map((s) => ({
       ...s,
-      signed_url: signedByPath.get(s.storage_path) ?? undefined,
+      signed_url: s.storage_path
+        ? signedByPath.get(s.storage_path) ?? undefined
+        : undefined,
     })),
   }));
 
   return {
     accounts: (accounts ?? []) as TradingAccount[],
     strategies: (strategies ?? []) as TradingStrategy[],
+    tagPresets: (tagPresets ?? []) as TradingTagPreset[],
     trades: tradesWithUrls,
   };
 }
@@ -51,7 +60,13 @@ async function signScreenshotUrls(
   screenshots: TradeScreenshot[]
 ): Promise<Map<string, string>> {
   const map = new Map<string, string>();
-  const uniquePaths = [...new Set(screenshots.map((s) => s.storage_path))];
+  const uniquePaths = [
+    ...new Set(
+      screenshots
+        .map((s) => s.storage_path)
+        .filter((p): p is string => Boolean(p))
+    ),
+  ];
 
   await Promise.all(
     uniquePaths.map(async (path) => {

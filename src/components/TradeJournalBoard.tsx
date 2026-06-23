@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   bulkAssignStrategy,
   createTradingAccount,
+  addTradeScreenshotLink,
   deleteTradeScreenshot,
   updateTradeJournal,
   uploadTradeScreenshot,
@@ -16,23 +17,32 @@ import { MoodPicker } from "@/components/MoodPicker";
 import { DeleteAllTradesPanel } from "@/components/DeleteAllTradesPanel";
 import { DeleteTradeButton } from "@/components/DeleteTradeButton";
 import { StatCard } from "@/components/StatCard";
-import type { Trade, TradingAccount, TradingStrategy } from "@/lib/types/database";
+import { TagPicker } from "@/components/TagPicker";
+import { firstTradeMedia, TradeMediaThumb } from "@/components/TradeMediaThumb";
+import type { Trade, TradingAccount, TradingStrategy, TradingTagPreset } from "@/lib/types/database";
 
 type SortKey = "date" | "pnl" | "symbol" | "direction";
 type SortDir = "asc" | "desc";
+type OutcomeFilter = "all" | "wins" | "losses" | "breakeven";
 
 export function TradeJournalBoard({
   initialTrades,
   accounts: initialAccounts,
   strategies,
+  tagPresets,
 }: {
   initialTrades: Trade[];
   accounts: TradingAccount[];
   strategies: TradingStrategy[];
+  tagPresets: TradingTagPreset[];
 }) {
   const [trades, setTrades] = useState(initialTrades);
   const [accounts, setAccounts] = useState(initialAccounts);
   const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>([]);
+  const [filterStrategyIds, setFilterStrategyIds] = useState<string[]>([]);
+  const [filterTagNames, setFilterTagNames] = useState<string[]>([]);
+  const [filterOutcome, setFilterOutcome] = useState<OutcomeFilter>("all");
+  const [symbolSearch, setSymbolSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -41,12 +51,41 @@ export function TradeJournalBoard({
   const [bulkStrategy, setBulkStrategy] = useState("");
   const [pending, startTransition] = useTransition();
 
+  const allTagOptions = useMemo(() => {
+    const set = new Set<string>();
+    tagPresets.forEach((p) => set.add(p.name));
+    trades.forEach((t) => t.trade_tags?.forEach((tt) => set.add(tt.tag)));
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [trades, tagPresets]);
+
   const filtered = useMemo(() => {
     let list = trades;
     if (selectedAccountIds.length > 0) {
       list = list.filter(
         (t) => t.account_id && selectedAccountIds.includes(t.account_id)
       );
+    }
+    if (filterStrategyIds.length > 0) {
+      list = list.filter(
+        (t) => t.strategy_id && filterStrategyIds.includes(t.strategy_id)
+      );
+    }
+    if (filterTagNames.length > 0) {
+      list = list.filter((t) => {
+        const tags = t.trade_tags?.map((x) => x.tag) ?? [];
+        return filterTagNames.every((name) => tags.includes(name));
+      });
+    }
+    if (filterOutcome === "wins") {
+      list = list.filter((t) => Number(t.pnl) > 0);
+    } else if (filterOutcome === "losses") {
+      list = list.filter((t) => Number(t.pnl) < 0);
+    } else if (filterOutcome === "breakeven") {
+      list = list.filter((t) => Number(t.pnl) === 0);
+    }
+    if (symbolSearch.trim()) {
+      const q = symbolSearch.trim().toUpperCase();
+      list = list.filter((t) => t.symbol.toUpperCase().includes(q));
     }
 
     const sorted = [...list].sort((a, b) => {
@@ -68,9 +107,45 @@ export function TradeJournalBoard({
       return sortDir === "asc" ? cmp : -cmp;
     });
     return sorted;
-  }, [trades, selectedAccountIds, sortKey, sortDir]);
+  }, [
+    trades,
+    selectedAccountIds,
+    filterStrategyIds,
+    filterTagNames,
+    filterOutcome,
+    symbolSearch,
+    sortKey,
+    sortDir,
+  ]);
 
   const stats = useMemo(() => computeTradeStats(filtered), [filtered]);
+
+  function toggleStrategyFilter(id: string) {
+    setFilterStrategyIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  function toggleTagFilter(name: string) {
+    setFilterTagNames((prev) =>
+      prev.includes(name) ? prev.filter((x) => x !== name) : [...prev, name]
+    );
+  }
+
+  function clearAllFilters() {
+    setSelectedAccountIds([]);
+    setFilterStrategyIds([]);
+    setFilterTagNames([]);
+    setFilterOutcome("all");
+    setSymbolSearch("");
+  }
+
+  const hasActiveFilters =
+    selectedAccountIds.length > 0 ||
+    filterStrategyIds.length > 0 ||
+    filterTagNames.length > 0 ||
+    filterOutcome !== "all" ||
+    symbolSearch.trim().length > 0;
 
   function toggleAccount(id: string) {
     setSelectedAccountIds((prev) =>
@@ -137,6 +212,13 @@ export function TradeJournalBoard({
             : t
         )
       );
+    });
+  }
+
+  async function handleScreenshotLink(tradeId: string, url: string) {
+    startTransition(async () => {
+      await addTradeScreenshotLink(tradeId, url);
+      window.location.reload();
     });
   }
 
@@ -246,19 +328,137 @@ export function TradeJournalBoard({
       <div className="card p-4 space-y-4">
         <div className="flex flex-wrap items-center gap-3 justify-between">
           <div>
-            <h2 className="font-medium text-sm">Accounts</h2>
+            <h2 className="font-medium text-sm">Filters</h2>
             <p className="text-xs text-muted mt-0.5">
-              Filter by account — select none to show all
+              Narrow by account, outcome, strategy, tags, or symbol
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-secondary text-xs py-1.5 px-3"
-            onClick={() => setShowAccountForm((v) => !v)}
-          >
-            {showAccountForm ? "Cancel" : "+ Add account"}
-          </button>
+          <div className="flex gap-2">
+            {hasActiveFilters && (
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline"
+                onClick={clearAllFilters}
+              >
+                Clear all filters
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-secondary text-xs py-1.5 px-3"
+              onClick={() => setShowAccountForm((v) => !v)}
+            >
+              {showAccountForm ? "Cancel" : "+ Add account"}
+            </button>
+          </div>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <p className="text-xs text-muted mb-2">Outcome</p>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["all", "All"],
+                  ["wins", "Wins"],
+                  ["losses", "Losses"],
+                  ["breakeven", "Breakeven"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setFilterOutcome(key)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    filterOutcome === key
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border text-muted hover:border-primary/40"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-muted mb-2">Symbol search</p>
+            <input
+              className="input text-sm py-1.5"
+              value={symbolSearch}
+              onChange={(e) => setSymbolSearch(e.target.value)}
+              placeholder="e.g. NQ, ES, MNQ"
+            />
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs text-muted mb-2">Accounts</p>
+          <div className="flex flex-wrap gap-2">
+            {accounts.length === 0 ? (
+              <p className="text-sm text-muted">No accounts yet.</p>
+            ) : (
+              accounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  type="button"
+                  onClick={() => toggleAccount(acc.id)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    selectedAccountIds.includes(acc.id)
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border text-muted hover:border-primary/40"
+                  }`}
+                >
+                  {acc.name}
+                  {acc.is_default && " ★"}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        {strategies.length > 0 && (
+          <div>
+            <p className="text-xs text-muted mb-2">Strategies</p>
+            <div className="flex flex-wrap gap-2">
+              {strategies.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => toggleStrategyFilter(s.id)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    filterStrategyIds.includes(s.id)
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border text-muted hover:border-primary/40"
+                  }`}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {allTagOptions.length > 0 && (
+          <div>
+            <p className="text-xs text-muted mb-2">Tags</p>
+            <div className="flex flex-wrap gap-2">
+              {allTagOptions.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTagFilter(tag)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                    filterTagNames.includes(tag)
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border text-muted hover:border-primary/40"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {showAccountForm && (
           <form
@@ -288,39 +488,6 @@ export function TradeJournalBoard({
             </div>
           </form>
         )}
-
-        <div className="flex flex-wrap gap-2">
-          {accounts.length === 0 ? (
-            <p className="text-sm text-muted">
-              No accounts yet — add one to organize imports and trades.
-            </p>
-          ) : (
-            accounts.map((acc) => (
-              <button
-                key={acc.id}
-                type="button"
-                onClick={() => toggleAccount(acc.id)}
-                className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                  selectedAccountIds.includes(acc.id)
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted hover:border-primary/40"
-                }`}
-              >
-                {acc.name}
-                {acc.is_default && " ★"}
-              </button>
-            ))
-          )}
-          {selectedAccountIds.length > 0 && (
-            <button
-              type="button"
-              className="text-xs text-primary hover:underline"
-              onClick={() => setSelectedAccountIds([])}
-            >
-              Clear filter
-            </button>
-          )}
-        </div>
       </div>
 
       <div className="card overflow-hidden">
@@ -430,9 +597,11 @@ export function TradeJournalBoard({
                 }
                 onSave={handleJournalSave}
                 onUpload={(file) => handleScreenshotUpload(trade.id, file)}
+                onAddLink={(url) => handleScreenshotLink(trade.id, url)}
                 onDeleteScreenshot={handleScreenshotDelete}
                 onDeleted={handleDeleteTrade}
                 strategies={strategies}
+                tagPresets={tagPresets}
               />
             ))}
           </div>
@@ -453,9 +622,11 @@ function TradeJournalRow({
   onToggle,
   onSave,
   onUpload,
+  onAddLink,
   onDeleteScreenshot,
   onDeleted,
   strategies,
+  tagPresets,
 }: {
   trade: Trade;
   selected: boolean;
@@ -472,9 +643,11 @@ function TradeJournalRow({
     tags: string
   ) => void;
   onUpload: (file: File) => void;
+  onAddLink: (url: string) => void;
   onDeleteScreenshot: (id: string) => void;
   onDeleted: (tradeId: string) => void;
   strategies: TradingStrategy[];
+  tagPresets: TradingTagPreset[];
 }) {
   const [notes, setNotes] = useState(trade.notes ?? "");
   const [mood, setMood] = useState(trade.emotional_state ?? "");
@@ -485,6 +658,7 @@ function TradeJournalRow({
   const [tags, setTags] = useState(
     trade.trade_tags?.map((t) => t.tag).join(", ") ?? ""
   );
+  const [chartLink, setChartLink] = useState("");
 
   const selectedStrategy =
     strategies.find((s) => s.id === strategyId) ?? trade.trading_strategies ?? null;
@@ -495,6 +669,8 @@ function TradeJournalRow({
   const accountName = trade.trading_accounts?.name;
   const screenshots = trade.trade_screenshots ?? [];
   const pnl = Number(trade.pnl);
+  const thumb = firstTradeMedia(screenshots);
+  const extraTags = trade.trade_tags?.map((t) => t.tag) ?? [];
 
   return (
     <div className="p-4 hover:bg-background/30 transition-colors">
@@ -513,12 +689,8 @@ function TradeJournalRow({
       >
         <div className="flex flex-wrap gap-3 items-start justify-between">
           <div className="flex gap-3 min-w-0 flex-1">
-            {screenshots[0]?.signed_url ? (
-              <img
-                src={screenshots[0].signed_url}
-                alt=""
-                className="w-16 h-16 rounded object-cover border border-border shrink-0"
-              />
+            {thumb ? (
+              <TradeMediaThumb shot={thumb} size="sm" />
             ) : (
               <div className="w-16 h-16 rounded border border-dashed border-border flex items-center justify-center text-muted text-xs shrink-0">
                 No img
@@ -538,6 +710,14 @@ function TradeJournalRow({
                     {trade.setup_tag}
                   </span>
                 )}
+                {extraTags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-xs px-2 py-0.5 rounded-full bg-white/5 text-muted border border-border/60"
+                  >
+                    {tag}
+                  </span>
+                ))}
                 {trade.rule_followed === false && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-danger/15 text-danger">
                     Rules broken
@@ -592,12 +772,10 @@ function TradeJournalRow({
             </div>
             <div>
               <label className="label">Extra tags</label>
-              <input
-                className="input"
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder="comma-separated"
-              />
+              <p className="text-xs text-muted mb-1.5">
+                Quick labels for what you did (R:R, session, setup quality)
+              </p>
+              <TagPicker value={tags} onChange={setTags} presets={tagPresets} />
             </div>
           </div>
 
@@ -642,19 +820,11 @@ function TradeJournalRow({
           </div>
 
           <div>
-            <label className="label">Screenshots</label>
+            <label className="label">Screenshots & chart links</label>
             <div className="flex flex-wrap gap-2 mt-2">
               {screenshots.map((shot) => (
                 <div key={shot.id} className="relative group">
-                  {shot.signed_url && (
-                    <a href={shot.signed_url} target="_blank" rel="noreferrer">
-                      <img
-                        src={shot.signed_url}
-                        alt=""
-                        className="w-24 h-24 rounded object-cover border border-border"
-                      />
-                    </a>
-                  )}
+                  <TradeMediaThumb shot={shot} size="md" />
                   <button
                     type="button"
                     onClick={() => onDeleteScreenshot(shot.id)}
@@ -678,6 +848,25 @@ function TradeJournalRow({
                 />
               </label>
             </div>
+            <form
+              className="flex flex-wrap gap-2 mt-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!chartLink.trim()) return;
+                onAddLink(chartLink.trim());
+                setChartLink("");
+              }}
+            >
+              <input
+                className="input flex-1 min-w-[200px] text-sm"
+                value={chartLink}
+                onChange={(e) => setChartLink(e.target.value)}
+                placeholder="https://www.tradingview.com/x/..."
+              />
+              <button type="submit" className="btn btn-secondary text-xs py-1.5" disabled={pending}>
+                Add TradingView link
+              </button>
+            </form>
           </div>
 
           <div className="flex flex-wrap gap-2">

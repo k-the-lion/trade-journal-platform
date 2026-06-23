@@ -15,7 +15,9 @@ export async function getScreenshotPathsForTrades(
     .select("storage_path")
     .in("trade_id", tradeIds);
 
-  return ((shots ?? []) as { storage_path: string }[]).map((s) => s.storage_path);
+  return ((shots ?? []) as { storage_path: string | null }[])
+    .map((s) => s.storage_path)
+    .filter((p): p is string => Boolean(p));
 }
 
 export async function removeScreenshotFiles(

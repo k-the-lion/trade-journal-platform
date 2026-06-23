@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, getProfile } from "@/lib/supabase/server";
-import type { AccountType, TradeInput, TradingStrategy } from "@/lib/types/database";
+import type { AccountType, TradeInput, TradingStrategy, TradingTagPreset } from "@/lib/types/database";
 import { permanentlyDeleteTradesForUser } from "@/lib/trades/delete";
 import { BUCKET, tradeScreenshotPath } from "@/lib/supabase/storage";
+import { isAllowedChartLink, normalizeChartLink } from "@/lib/screenshots";
 import { resolveStrategyFields } from "@/lib/strategies/sync";
 import { STRATEGY_TEMPLATES } from "@/lib/constants/strategies";
 import { normalizedToTradeInput, getImportAdapter } from "@/lib/imports/adapter";
@@ -160,6 +161,51 @@ export async function seedStrategyTemplates() {
   return { added: toInsert.length };
 }
 
+export async function createTagPreset(name: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Tag name is required");
+
+  const { data: existing } = await supabase
+    .from("trading_tag_presets")
+    .select("sort_order")
+    .eq("user_id", profile.id)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+
+  const sort_order = (existing?.[0]?.sort_order ?? -1) + 1;
+
+  const { data, error } = await supabase
+    .from("trading_tag_presets")
+    .insert({ user_id: profile.id, name: trimmed, sort_order })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/strategies");
+  revalidatePath("/dashboard");
+  return data as TradingTagPreset;
+}
+
+export async function deleteTagPreset(id: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("trading_tag_presets")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", profile.id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/strategies");
+  revalidatePath("/dashboard");
+}
+
 export async function updateTradeJournal(
   tradeId: string,
   data: {
@@ -249,6 +295,43 @@ export async function uploadTradeScreenshot(tradeId: string, formData: FormData)
   revalidatePath(`/trades/${tradeId}`);
 }
 
+export async function addTradeScreenshotLink(tradeId: string, rawUrl: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const link_url = normalizeChartLink(rawUrl);
+  if (!isAllowedChartLink(link_url)) {
+    throw new Error("Only TradingView chart links are supported (tradingview.com/x/...)");
+  }
+
+  const { data: trade } = await supabase
+    .from("trades")
+    .select("id")
+    .eq("id", tradeId)
+    .eq("user_id", profile.id)
+    .single();
+
+  if (!trade) throw new Error("Trade not found");
+
+  const { count } = await supabase
+    .from("trade_screenshots")
+    .select("*", { count: "exact", head: true })
+    .eq("trade_id", tradeId);
+
+  const { error } = await supabase.from("trade_screenshots").insert({
+    trade_id: tradeId,
+    storage_path: null,
+    link_url,
+    sort_order: count ?? 0,
+  });
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath(`/trades/${tradeId}`);
+}
+
 export async function deleteTradeScreenshot(screenshotId: string) {
   const supabase = await createClient();
   const profile = await getProfile();
@@ -271,7 +354,9 @@ export async function deleteTradeScreenshot(screenshotId: string) {
 
   if (!trade) throw new Error("Screenshot not found");
 
-  await supabase.storage.from(BUCKET).remove([shot.storage_path]);
+  if (shot.storage_path) {
+    await supabase.storage.from(BUCKET).remove([shot.storage_path]);
+  }
   await supabase.from("trade_screenshots").delete().eq("id", screenshotId);
 
   revalidatePath("/dashboard");
