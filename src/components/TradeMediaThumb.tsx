@@ -1,22 +1,22 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { chartLinkLabel, isTradingViewChartUrl } from "@/lib/screenshots";
+import { chartPreviewApiUrl, isTradingViewChartUrl } from "@/lib/screenshots";
 import type { TradeScreenshot } from "@/lib/types/database";
 
 const PREVIEW_IMAGE_CLASS =
   "max-w-[min(94vw,960px)] max-h-[min(88vh,800px)] rounded-lg object-contain";
-const PREVIEW_IFRAME_CLASS =
-  "w-[min(94vw,960px)] h-[min(82vh,640px)] rounded-lg bg-black/20 border-0";
 const PREVIEW_SHELL_CLASS =
   "block rounded-xl border border-border bg-surface shadow-2xl p-3 max-w-[min(96vw,1000px)]";
 
 export function MediaHoverPreview({
   children,
   preview,
+  interactive = false,
 }: {
   children: ReactNode;
   preview: ReactNode;
+  interactive?: boolean;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -29,7 +29,7 @@ export function MediaHoverPreview({
       {children}
       {open && (
         <span
-          className="fixed z-[100] pointer-events-none"
+          className={`fixed z-[100] ${interactive ? "pointer-events-auto" : "pointer-events-none"}`}
           style={{
             left: "50%",
             top: "50%",
@@ -47,33 +47,34 @@ function ChartLinkThumb({
   url,
   dims,
   interactive,
+  previewSrc,
 }: {
   url: string;
   dims: string;
   interactive?: boolean;
+  previewSrc: string;
 }) {
   const inner = (
     <div
-      className={`${dims} rounded-lg overflow-hidden border border-border relative bg-[#0b1220] shrink-0 cursor-zoom-in group`}
+      className={`${dims} rounded-lg overflow-hidden border border-border relative bg-[#0b1220] shrink-0 cursor-zoom-in`}
     >
-      {isTradingViewChartUrl(url) ? (
-        <iframe
-          src={url}
-          title="Chart preview"
-          className="absolute top-0 left-0 border-0 pointer-events-none"
-          style={{
-            width: "320%",
-            height: "320%",
-            transform: "scale(0.3125)",
-            transformOrigin: "top left",
-          }}
-          loading="lazy"
-        />
-      ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center text-primary bg-primary/10">
-          <span className="text-lg">📈</span>
-        </div>
-      )}
+      <img
+        src={previewSrc}
+        alt="TradingView chart"
+        className="w-full h-full object-cover"
+        onError={(e) => {
+          const el = e.currentTarget;
+          el.style.display = "none";
+          const fallback = el.nextElementSibling as HTMLElement | null;
+          if (fallback) fallback.style.display = "flex";
+        }}
+      />
+      <div
+        className="absolute inset-0 hidden flex-col items-center justify-center text-primary bg-primary/10"
+        aria-hidden
+      >
+        <span className="text-lg">📈</span>
+      </div>
       <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[0.55rem] text-center text-primary py-0.5 font-medium">
         TradingView
       </span>
@@ -89,6 +90,24 @@ function ChartLinkThumb({
   }
 
   return inner;
+}
+
+function ChartLinkHoverPreview({ url }: { url: string }) {
+  const previewSrc = chartPreviewApiUrl(url);
+
+  return (
+    <div className="space-y-2 text-center">
+      <img src={previewSrc} alt="" className={PREVIEW_IMAGE_CLASS} />
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+      >
+        Open chart on TradingView ↗
+      </a>
+    </div>
+  );
 }
 
 export function TradeMediaThumb({
@@ -118,25 +137,18 @@ export function TradeMediaThumb({
   }
 
   if (shot.link_url) {
-    const label = chartLinkLabel(shot.link_url);
+    const previewSrc = chartPreviewApiUrl(shot.link_url);
     return (
       <MediaHoverPreview
-        preview={
-          isTradingViewChartUrl(shot.link_url) ? (
-            <iframe src={shot.link_url} title={label} className={PREVIEW_IFRAME_CLASS} />
-          ) : (
-            <a
-              href={shot.link_url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-primary underline text-sm p-4 block pointer-events-auto"
-            >
-              Open chart link
-            </a>
-          )
-        }
+        interactive={isTradingViewChartUrl(shot.link_url)}
+        preview={<ChartLinkHoverPreview url={shot.link_url} />}
       >
-        <ChartLinkThumb url={shot.link_url} dims={dims} interactive={interactive} />
+        <ChartLinkThumb
+          url={shot.link_url}
+          dims={dims}
+          interactive={interactive}
+          previewSrc={previewSrc}
+        />
       </MediaHoverPreview>
     );
   }

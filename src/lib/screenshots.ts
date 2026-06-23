@@ -23,3 +23,7 @@ export function chartLinkLabel(url: string): string {
   if (isTradingViewChartUrl(url)) return "TradingView chart";
   return "Chart link";
 }
+
+export function chartPreviewApiUrl(chartUrl: string): string {
+  return `/api/chart-preview?url=${encodeURIComponent(normalizeChartLink(chartUrl))}`;
+}
