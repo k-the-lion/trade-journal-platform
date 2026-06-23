@@ -7,7 +7,7 @@ Multi-user trading journal with AI coaching, performance reports, and coach-mana
 - **Auth** — Email/password signup and login via Supabase
 - **Trade logging** — Manual entry with tags, setup, rule adherence, account type
 - **Reports** — Win rate, profit factor, equity curve, breakdowns by symbol/setup/day
-- **AI Coach** — Chat powered by OpenAI using coach-defined playbooks + trade context
+- **AI Coach** — Chat powered by Claude Haiku 3.5 using coach-defined playbooks + trade context
 - **Coach dashboard** — Create orgs, invite students, view group performance
 - **CSV import** — Flexible column mapping with dedup via `external_id`
 - **Broker-ready** — Import adapter interface for future API sync (Tradovate stub included)
@@ -17,7 +17,7 @@ Multi-user trading journal with AI coaching, performance reports, and coach-mana
 ### 1. Supabase
 
 1. Create a project at [supabase.com](https://supabase.com)
-2. Run the migration in `supabase/migrations/001_initial_schema.sql` via the SQL editor
+2. Run migrations in `supabase/migrations/` via the SQL editor (001 through 004)
 3. Copy your project URL and anon key
 
 ### 2. Environment
@@ -31,7 +31,8 @@ Fill in:
 ```
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-OPENAI_API_KEY=...   # optional; chat works with fallback message without it
+OPENAI_API_KEY=...   # optional legacy
+ANTHROPIC_API_KEY=...   # AI coach (Claude Haiku 3.5)
 ```
 
 ### 3. Run locally

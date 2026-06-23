@@ -2,16 +2,24 @@
 
 import { useState } from "react";
 import { createTrade, updateTrade } from "@/lib/actions";
+import { DEFAULT_STRATEGIES } from "@/lib/constants/trade-meta";
+import { MoodPicker } from "@/components/MoodPicker";
 import type { AccountType, Trade, TradeDirection } from "@/lib/types/database";
 
 interface TradeFormProps {
   trade?: Trade;
   orgOptions?: { id: string; name: string }[];
+  accountOptions?: { id: string; name: string }[];
 }
 
-export function TradeForm({ trade, orgOptions = [] }: TradeFormProps) {
+export function TradeForm({
+  trade,
+  orgOptions = [],
+  accountOptions = [],
+}: TradeFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [mood, setMood] = useState(trade?.emotional_state ?? "");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,7 +44,7 @@ export function TradeForm({ trade, orgOptions = [] }: TradeFormProps) {
       r_multiple: fd.get("r_multiple") ? Number(fd.get("r_multiple")) : null,
       setup_tag: String(fd.get("setup_tag") || "") || null,
       notes: String(fd.get("notes") || "") || null,
-      emotional_state: String(fd.get("emotional_state") || "") || null,
+      emotional_state: mood || String(fd.get("emotional_state") || "") || null,
       rule_followed:
         fd.get("rule_followed") === "yes"
           ? true
@@ -44,6 +52,7 @@ export function TradeForm({ trade, orgOptions = [] }: TradeFormProps) {
             ? false
             : null,
       account_type: (String(fd.get("account_type") || "") || null) as AccountType | null,
+      account_id: String(fd.get("account_id") || "") || null,
       org_id: String(fd.get("org_id") || "") || null,
       tags,
     };
@@ -54,7 +63,7 @@ export function TradeForm({ trade, orgOptions = [] }: TradeFormProps) {
         window.location.href = `/trades/${trade.id}`;
       } else {
         await createTrade(input);
-        window.location.href = "/trades";
+        window.location.href = "/dashboard";
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save trade");
@@ -90,15 +99,27 @@ export function TradeForm({ trade, orgOptions = [] }: TradeFormProps) {
             <option value="short">Short</option>
           </select>
         </div>
-        <div>
-          <label className="label" htmlFor="account_type">Account type</label>
-          <select id="account_type" name="account_type" className="input" defaultValue={trade?.account_type ?? ""}>
-            <option value="">—</option>
-            <option value="eval">Eval</option>
-            <option value="funded">Funded</option>
-            <option value="personal">Personal</option>
-          </select>
-        </div>
+        {accountOptions.length > 0 ? (
+          <div>
+            <label className="label" htmlFor="account_id">Trading account</label>
+            <select id="account_id" name="account_id" className="input" defaultValue={trade?.account_id ?? ""}>
+              <option value="">—</option>
+              {accountOptions.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className="label" htmlFor="account_type">Account type</label>
+            <select id="account_type" name="account_type" className="input" defaultValue={trade?.account_type ?? ""}>
+              <option value="">—</option>
+              <option value="eval">Eval</option>
+              <option value="funded">Funded</option>
+              <option value="personal">Personal</option>
+            </select>
+          </div>
+        )}
         <div>
           <label className="label" htmlFor="entry_price">Entry price</label>
           <input id="entry_price" name="entry_price" type="number" step="any" className="input" defaultValue={trade?.entry_price ?? ""} />
@@ -120,12 +141,13 @@ export function TradeForm({ trade, orgOptions = [] }: TradeFormProps) {
           <input id="r_multiple" name="r_multiple" type="number" step="any" className="input" defaultValue={trade?.r_multiple ?? ""} />
         </div>
         <div>
-          <label className="label" htmlFor="setup_tag">Setup / tag</label>
-          <input id="setup_tag" name="setup_tag" className="input" defaultValue={trade?.setup_tag ?? ""} placeholder="breakout, reversal..." />
-        </div>
-        <div>
-          <label className="label" htmlFor="emotional_state">Emotional state</label>
-          <input id="emotional_state" name="emotional_state" className="input" defaultValue={trade?.emotional_state ?? ""} placeholder="calm, FOMO, revenge..." />
+          <label className="label" htmlFor="setup_tag">Strategy</label>
+          <select id="setup_tag" name="setup_tag" className="input" defaultValue={trade?.setup_tag ?? ""}>
+            <option value="">—</option>
+            {DEFAULT_STRATEGIES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="label" htmlFor="rule_followed">Rule followed?</label>
@@ -151,20 +173,25 @@ export function TradeForm({ trade, orgOptions = [] }: TradeFormProps) {
       </div>
 
       <div>
-        <label className="label" htmlFor="tags">Tags (comma-separated)</label>
+        <p className="label mb-2">How did you feel about this trade?</p>
+        <MoodPicker value={mood} onChange={setMood} />
+      </div>
+
+      <div>
+        <label className="label" htmlFor="tags">Extra tags (comma-separated)</label>
         <input id="tags" name="tags" className="input" defaultValue={trade?.trade_tags?.map((t) => t.tag).join(", ") ?? ""} />
       </div>
 
       <div>
-        <label className="label" htmlFor="notes">Notes</label>
-        <textarea id="notes" name="notes" rows={4} className="input resize-y" defaultValue={trade?.notes ?? ""} />
+        <label className="label" htmlFor="notes">Journal notes</label>
+        <textarea id="notes" name="notes" rows={4} className="input resize-y" defaultValue={trade?.notes ?? ""} placeholder="What was your read? What would you repeat or change?" />
       </div>
 
       <div className="flex gap-3">
         <button type="submit" className="btn btn-primary" disabled={loading}>
           {loading ? "Saving..." : trade ? "Update trade" : "Log trade"}
         </button>
-        <a href={trade ? `/trades/${trade.id}` : "/trades"} className="btn btn-secondary">
+        <a href={trade ? `/trades/${trade.id}` : "/dashboard"} className="btn btn-secondary">
           Cancel
         </a>
       </div>

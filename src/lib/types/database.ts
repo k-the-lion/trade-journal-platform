@@ -60,10 +60,32 @@ export interface CoachingPlaybook {
   updated_at: string;
 }
 
+export interface TradingAccount {
+  id: string;
+  user_id: string;
+  name: string;
+  broker: string | null;
+  account_type: AccountType | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TradeScreenshot {
+  id: string;
+  trade_id: string;
+  storage_path: string;
+  caption: string | null;
+  sort_order: number;
+  created_at: string;
+  signed_url?: string;
+}
+
 export interface Trade {
   id: string;
   user_id: string;
   org_id: string | null;
+  account_id: string | null;
   traded_at: string;
   symbol: string;
   direction: TradeDirection;
@@ -84,6 +106,8 @@ export interface Trade {
   created_at: string;
   updated_at: string;
   trade_tags?: TradeTag[];
+  trade_screenshots?: TradeScreenshot[];
+  trading_accounts?: TradingAccount | null;
 }
 
 export interface TradeTag {
@@ -137,8 +161,10 @@ export interface TradeInput {
   emotional_state?: string | null;
   rule_followed?: boolean | null;
   account_type?: AccountType | null;
+  account_id?: string | null;
   org_id?: string | null;
   tags?: string[];
+  screenshot_url?: string | null;
 }
 
 type TableDef<Row, Insert, Update> = {
@@ -162,6 +188,16 @@ export interface Database {
         Partial<Trade>
       >;
       trade_tags: TableDef<TradeTag, Omit<TradeTag, "id">, Partial<TradeTag>>;
+      trading_accounts: TableDef<
+        TradingAccount,
+        Partial<TradingAccount> & { user_id: string; name: string },
+        Partial<TradingAccount>
+      >;
+      trade_screenshots: TableDef<
+        TradeScreenshot,
+        Omit<TradeScreenshot, "id" | "created_at">,
+        Partial<TradeScreenshot>
+      >;
       import_jobs: TableDef<ImportJob, Partial<ImportJob> & { user_id: string; source: ImportSource }, Partial<ImportJob>>;
       chat_sessions: TableDef<ChatSession, Partial<ChatSession> & { user_id: string }, Partial<ChatSession>>;
       chat_messages: TableDef<ChatMessage, Omit<ChatMessage, "id" | "created_at">, Partial<ChatMessage>>;

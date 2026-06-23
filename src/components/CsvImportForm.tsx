@@ -43,7 +43,14 @@ const EXPORT_GUIDES: Record<ImportPreset, string> = {
   generic: "Any CSV with date, symbol, and P&L columns. Map columns below if needed.",
 };
 
-export function CsvImportForm({ orgOptions = [] }: { orgOptions?: { id: string; name: string }[] }) {
+export function CsvImportForm({
+  orgOptions = [],
+  accountOptions = [],
+}: {
+  orgOptions?: { id: string; name: string }[];
+  accountOptions?: { id: string; name: string; is_default?: boolean }[];
+}) {
+  const defaultAccount = accountOptions.find((a) => a.is_default) ?? accountOptions[0];
   const [csvText, setCsvText] = useState("");
   const [preset, setPreset] = useState<ImportPreset>("auto");
   const [detectedLabel, setDetectedLabel] = useState<string | null>(null);
@@ -52,6 +59,7 @@ export function CsvImportForm({ orgOptions = [] }: { orgOptions?: { id: string; 
   const [result, setResult] = useState<{ imported: number; skipped: number; errors: string[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [orgId, setOrgId] = useState("");
+  const [accountId, setAccountId] = useState(defaultAccount?.id ?? "");
 
   const showColumnMapper = preset === "generic" || preset === "auto";
 
@@ -80,7 +88,13 @@ export function CsvImportForm({ orgOptions = [] }: { orgOptions?: { id: string; 
     setLoading(true);
     setResult(null);
     try {
-      const res = await importCsvTrades(csvText, mapping, orgId || null, preset);
+      const res = await importCsvTrades(
+        csvText,
+        mapping,
+        orgId || null,
+        preset,
+        accountId || null
+      );
       setResult(res);
     } catch (err) {
       setResult({
@@ -123,6 +137,25 @@ export function CsvImportForm({ orgOptions = [] }: { orgOptions?: { id: string; 
           className="text-sm text-muted w-full"
         />
       </div>
+
+      {accountOptions.length > 0 && (
+        <div>
+          <label className="label">Assign to trading account</label>
+          <select
+            className="input"
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
+            <option value="">No account</option>
+            {accountOptions.map((a) => (
+              <option key={a.id} value={a.id}>{a.name}</option>
+            ))}
+          </select>
+          <p className="text-xs text-muted mt-1">
+            Imports will be tagged to this account for filtering on the dashboard.
+          </p>
+        </div>
+      )}
 
       {orgOptions.length > 0 && (
         <div>

@@ -18,12 +18,22 @@ async function getOrgOptions(userId: string) {
 
 export default async function NewTradePage() {
   const profile = await getProfile();
+  const supabase = await createClient();
   const orgOptions = await getOrgOptions(profile!.id);
+
+  const { data: accounts } = await supabase
+    .from("trading_accounts")
+    .select("id, name")
+    .eq("user_id", profile!.id)
+    .order("name");
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Log a trade</h1>
-      <TradeForm orgOptions={orgOptions} />
+      <TradeForm
+        orgOptions={orgOptions}
+        accountOptions={(accounts ?? []).map((a) => ({ id: a.id, name: a.name }))}
+      />
     </div>
   );
 }

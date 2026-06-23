@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/ai/context";
 import type { CoachingPlaybook, Trade } from "@/lib/types/database";
 
-function getOpenAI() {
-  const key = process.env.OPENAI_API_KEY;
+const MODEL = "claude-3-5-haiku-20241022";
+
+function getAnthropic() {
+  const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return null;
-  return new OpenAI({ apiKey: key });
+  return new Anthropic({ apiKey: key });
 }
 
 export async function POST(request: Request) {
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
 
   const { data: trades } = await supabase
     .from("trades")
-    .select("*")
+    .select("*, trade_tags(tag)")
     .eq("user_id", profile.id)
     .order("traded_at", { ascending: false })
     .limit(100);
@@ -101,33 +103,39 @@ export async function POST(request: Request) {
     .order("created_at", { ascending: true })
     .limit(20);
 
-  const messages = [
-    { role: "system" as const, content: systemPrompt },
-    ...(history ?? [])
-      .filter((m) => m.role !== "system")
-      .map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-      })),
-  ];
+  const chatMessages = (history ?? [])
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
 
-  const openai = getOpenAI();
+  const anthropic = getAnthropic();
   let assistantContent: string;
 
-  if (!openai) {
+  if (!anthropic) {
     assistantContent =
-      "AI coaching is not configured yet. Add OPENAI_API_KEY to your environment. " +
+      "AI coaching is not configured yet. Add ANTHROPIC_API_KEY to your environment. " +
       "Based on your logged trades, focus on reviewing your recent P&L patterns and rule adherence.";
   } else {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages,
-      temperature: 0.7,
+    const response = await anthropic.messages.create({
+      model: MODEL,
       max_tokens: 800,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
+      messages: chatMessages,
     });
+
+    const textBlock = response.content.find((b) => b.type === "text");
     assistantContent =
-      completion.choices[0]?.message?.content ??
-      "I couldn't generate a response. Please try again.";
+      textBlock && "text" in textBlock
+        ? textBlock.text
+        : "I couldn't generate a response. Please try again.";
   }
 
   await supabase.from("chat_messages").insert({

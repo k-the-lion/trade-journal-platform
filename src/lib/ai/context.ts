@@ -17,7 +17,7 @@ export function buildSystemPrompt(
       : recentTrades
           .map(
             (t) =>
-              `- ${t.traded_at.slice(0, 10)} ${t.symbol} ${t.direction} PnL: $${t.pnl}${t.setup_tag ? ` Setup: ${t.setup_tag}` : ""}${t.rule_followed === false ? " [RULE BROKEN]" : ""}`
+              `- ${t.traded_at.slice(0, 10)} ${t.symbol} ${t.direction} PnL: $${t.pnl}${t.setup_tag ? ` Strategy: ${t.setup_tag}` : ""}${t.emotional_state ? ` Mood: ${t.emotional_state}` : ""}${t.notes ? ` Notes: ${t.notes.slice(0, 80)}` : ""}${t.rule_followed === false ? " [RULE BROKEN]" : ""}`
           )
           .join("\n");
 

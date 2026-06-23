@@ -40,13 +40,20 @@ export default async function TradeDetailPage({
   if (!trade) notFound();
 
   const orgOptions = await getOrgOptions(profile!.id);
+
+  const { data: accounts } = await supabase
+    .from("trading_accounts")
+    .select("id, name")
+    .eq("user_id", profile!.id)
+    .order("name");
+
   const t = trade as Trade;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link href="/trades" className="text-sm text-muted hover:text-primary">← Trades</Link>
+          <Link href="/dashboard" className="text-sm text-muted hover:text-primary">← Dashboard</Link>
           <h1 className="text-2xl font-semibold mt-1">
             {t.symbol}{" "}
             <span className={Number(t.pnl) >= 0 ? "positive" : "negative"}>
@@ -58,7 +65,11 @@ export default async function TradeDetailPage({
           <button type="submit" className="btn btn-danger text-sm">Delete</button>
         </form>
       </div>
-      <TradeForm trade={t} orgOptions={orgOptions} />
+      <TradeForm
+        trade={t}
+        orgOptions={orgOptions}
+        accountOptions={(accounts ?? []).map((a) => ({ id: a.id, name: a.name }))}
+      />
     </div>
   );
 }
