@@ -47,6 +47,13 @@ export default async function TradeDetailPage({
     .eq("user_id", profile!.id)
     .order("name");
 
+  const { data: strategies } = await supabase
+    .from("trading_strategies")
+    .select("*")
+    .eq("user_id", profile!.id)
+    .eq("is_active", true)
+    .order("name");
+
   const t = trade as Trade;
 
   return (
@@ -71,6 +78,7 @@ export default async function TradeDetailPage({
         trade={t}
         orgOptions={orgOptions}
         accountOptions={(accounts ?? []).map((a) => ({ id: a.id, name: a.name }))}
+        strategyOptions={strategies ?? []}
       />
     </div>
   );

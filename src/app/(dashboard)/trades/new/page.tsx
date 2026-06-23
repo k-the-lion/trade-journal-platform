@@ -27,12 +27,20 @@ export default async function NewTradePage() {
     .eq("user_id", profile!.id)
     .order("name");
 
+  const { data: strategies } = await supabase
+    .from("trading_strategies")
+    .select("*")
+    .eq("user_id", profile!.id)
+    .eq("is_active", true)
+    .order("name");
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Log a trade</h1>
       <TradeForm
         orgOptions={orgOptions}
         accountOptions={(accounts ?? []).map((a) => ({ id: a.id, name: a.name }))}
+        strategyOptions={strategies ?? []}
       />
     </div>
   );

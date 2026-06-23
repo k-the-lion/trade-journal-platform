@@ -37,6 +37,13 @@ export default async function ImportPage() {
     .order("is_default", { ascending: false })
     .order("name");
 
+  const { data: strategies } = await supabase
+    .from("trading_strategies")
+    .select("id, name")
+    .eq("user_id", profile!.id)
+    .eq("is_active", true)
+    .order("name");
+
   const accountOptions = (accounts ?? []).map((a) => ({
     id: a.id,
     name: a.name,
@@ -73,7 +80,11 @@ export default async function ImportPage() {
         </div>
       </div>
 
-      <CsvImportForm orgOptions={orgOptions} accountOptions={accountOptions} />
+      <CsvImportForm
+        orgOptions={orgOptions}
+        accountOptions={accountOptions}
+        strategyOptions={(strategies ?? []).map((s) => ({ id: s.id, name: s.name }))}
+      />
 
       <div className="card p-6 max-w-2xl space-y-3">
         <h2 className="font-medium text-sm">Supported formats</h2>

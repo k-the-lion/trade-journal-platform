@@ -81,11 +81,24 @@ export interface TradeScreenshot {
   signed_url?: string;
 }
 
+export interface TradingStrategy {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  rules: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Trade {
   id: string;
   user_id: string;
   org_id: string | null;
   account_id: string | null;
+  strategy_id: string | null;
   traded_at: string;
   symbol: string;
   direction: TradeDirection;
@@ -108,6 +121,7 @@ export interface Trade {
   trade_tags?: TradeTag[];
   trade_screenshots?: TradeScreenshot[];
   trading_accounts?: TradingAccount | null;
+  trading_strategies?: TradingStrategy | null;
 }
 
 export interface TradeTag {
@@ -162,6 +176,7 @@ export interface TradeInput {
   rule_followed?: boolean | null;
   account_type?: AccountType | null;
   account_id?: string | null;
+  strategy_id?: string | null;
   org_id?: string | null;
   tags?: string[];
   screenshot_url?: string | null;
@@ -192,6 +207,11 @@ export interface Database {
         TradingAccount,
         Partial<TradingAccount> & { user_id: string; name: string },
         Partial<TradingAccount>
+      >;
+      trading_strategies: TableDef<
+        TradingStrategy,
+        Partial<TradingStrategy> & { user_id: string; name: string },
+        Partial<TradingStrategy>
       >;
       trade_screenshots: TableDef<
         TradeScreenshot,

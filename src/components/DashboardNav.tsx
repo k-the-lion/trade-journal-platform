@@ -6,6 +6,7 @@ import { signOut } from "@/lib/actions";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/strategies", label: "Strategies" },
   { href: "/trades", label: "Trades" },
   { href: "/reports", label: "Reports" },
   { href: "/chat", label: "AI Coach" },

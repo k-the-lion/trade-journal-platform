@@ -9,13 +9,14 @@ import {
   updateTradeJournal,
   uploadTradeScreenshot,
 } from "@/lib/actions";
-import { DEFAULT_STRATEGIES, moodEmoji, moodLabel } from "@/lib/constants/trade-meta";
+import { parseStrategyRules } from "@/lib/constants/strategies";
+import { moodEmoji, moodLabel } from "@/lib/constants/trade-meta";
 import { computeTradeStats, formatCurrency } from "@/lib/reports/stats";
 import { MoodPicker } from "@/components/MoodPicker";
 import { DeleteAllTradesPanel } from "@/components/DeleteAllTradesPanel";
 import { DeleteTradeButton } from "@/components/DeleteTradeButton";
 import { StatCard } from "@/components/StatCard";
-import type { Trade, TradingAccount } from "@/lib/types/database";
+import type { Trade, TradingAccount, TradingStrategy } from "@/lib/types/database";
 
 type SortKey = "date" | "pnl" | "symbol" | "direction";
 type SortDir = "asc" | "desc";
@@ -23,9 +24,11 @@ type SortDir = "asc" | "desc";
 export function TradeJournalBoard({
   initialTrades,
   accounts: initialAccounts,
+  strategies,
 }: {
   initialTrades: Trade[];
   accounts: TradingAccount[];
+  strategies: TradingStrategy[];
 }) {
   const [trades, setTrades] = useState(initialTrades);
   const [accounts, setAccounts] = useState(initialAccounts);
@@ -93,7 +96,8 @@ export function TradeJournalBoard({
     tradeId: string,
     notes: string,
     mood: string,
-    strategy: string,
+    strategyId: string,
+    ruleFollowed: string,
     tagsRaw: string
   ) {
     const tags = tagsRaw
@@ -101,11 +105,15 @@ export function TradeJournalBoard({
       .map((t) => t.trim())
       .filter(Boolean);
 
+    const selected = strategies.find((s) => s.id === strategyId);
+
     startTransition(async () => {
       await updateTradeJournal(tradeId, {
         notes: notes || null,
         emotional_state: mood || null,
-        setup_tag: strategy || null,
+        strategy_id: strategyId || null,
+        rule_followed:
+          ruleFollowed === "yes" ? true : ruleFollowed === "no" ? false : null,
         tags,
       });
       setTrades((prev) =>
@@ -115,7 +123,11 @@ export function TradeJournalBoard({
                 ...t,
                 notes: notes || null,
                 emotional_state: mood || null,
-                setup_tag: strategy || null,
+                strategy_id: strategyId || null,
+                setup_tag: selected?.name ?? null,
+                trading_strategies: selected ?? null,
+                rule_followed:
+                  ruleFollowed === "yes" ? true : ruleFollowed === "no" ? false : null,
                 trade_tags: tags.map((tag, i) => ({
                   id: `local-${i}`,
                   trade_id: tradeId,
@@ -195,9 +207,17 @@ export function TradeJournalBoard({
 
     startTransition(async () => {
       await bulkAssignStrategy(ids, bulkStrategy);
+      const selected = strategies.find((s) => s.id === bulkStrategy);
       setTrades((prev) =>
         prev.map((t) =>
-          ids.includes(t.id) ? { ...t, setup_tag: bulkStrategy } : t
+          ids.includes(t.id)
+            ? {
+                ...t,
+                strategy_id: bulkStrategy,
+                setup_tag: selected?.name ?? null,
+                trading_strategies: selected ?? null,
+              }
+            : t
         )
       );
       setSelectedTradeIds([]);
@@ -353,10 +373,15 @@ export function TradeJournalBoard({
               onChange={(e) => setBulkStrategy(e.target.value)}
             >
               <option value="">Bulk strategy…</option>
-              {DEFAULT_STRATEGIES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+              {strategies.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
+            {strategies.length === 0 && (
+              <Link href="/strategies" className="text-xs text-primary hover:underline">
+                Create strategies first
+              </Link>
+            )}
             {selectedTradeIds.length > 0 && (
               <button
                 type="button"
@@ -407,6 +432,7 @@ export function TradeJournalBoard({
                 onUpload={(file) => handleScreenshotUpload(trade.id, file)}
                 onDeleteScreenshot={handleScreenshotDelete}
                 onDeleted={handleDeleteTrade}
+                strategies={strategies}
               />
             ))}
           </div>
@@ -429,6 +455,7 @@ function TradeJournalRow({
   onUpload,
   onDeleteScreenshot,
   onDeleted,
+  strategies,
 }: {
   trade: Trade;
   selected: boolean;
@@ -440,19 +467,30 @@ function TradeJournalRow({
     id: string,
     notes: string,
     mood: string,
-    strategy: string,
+    strategyId: string,
+    ruleFollowed: string,
     tags: string
   ) => void;
   onUpload: (file: File) => void;
   onDeleteScreenshot: (id: string) => void;
   onDeleted: (tradeId: string) => void;
+  strategies: TradingStrategy[];
 }) {
   const [notes, setNotes] = useState(trade.notes ?? "");
   const [mood, setMood] = useState(trade.emotional_state ?? "");
-  const [strategy, setStrategy] = useState(trade.setup_tag ?? "");
+  const [strategyId, setStrategyId] = useState(trade.strategy_id ?? "");
+  const [ruleFollowed, setRuleFollowed] = useState(
+    trade.rule_followed === true ? "yes" : trade.rule_followed === false ? "no" : ""
+  );
   const [tags, setTags] = useState(
     trade.trade_tags?.map((t) => t.tag).join(", ") ?? ""
   );
+
+  const selectedStrategy =
+    strategies.find((s) => s.id === strategyId) ?? trade.trading_strategies ?? null;
+  const strategyRules = selectedStrategy
+    ? parseStrategyRules(selectedStrategy.rules)
+    : [];
 
   const accountName = trade.trading_accounts?.name;
   const screenshots = trade.trade_screenshots ?? [];
@@ -500,6 +538,11 @@ function TradeJournalRow({
                     {trade.setup_tag}
                   </span>
                 )}
+                {trade.rule_followed === false && (
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-danger/15 text-danger">
+                    Rules broken
+                  </span>
+                )}
                 {accountName && (
                   <span className="text-xs text-muted">{accountName}</span>
                 )}
@@ -531,16 +574,21 @@ function TradeJournalRow({
               <label className="label">Strategy</label>
               <select
                 className="input"
-                value={strategy}
-                onChange={(e) => setStrategy(e.target.value)}
+                value={strategyId}
+                onChange={(e) => setStrategyId(e.target.value)}
               >
                 <option value="">—</option>
-                {DEFAULT_STRATEGIES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+                {strategies.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
                   </option>
                 ))}
               </select>
+              {strategies.length === 0 && (
+                <Link href="/strategies" className="text-xs text-primary hover:underline mt-1 inline-block">
+                  Create strategies →
+                </Link>
+              )}
             </div>
             <div>
               <label className="label">Extra tags</label>
@@ -552,6 +600,36 @@ function TradeJournalRow({
               />
             </div>
           </div>
+
+          {selectedStrategy && strategyRules.length > 0 && (
+            <div className="rounded-lg border border-border/60 p-3 bg-background/40">
+              <p className="text-xs font-medium text-muted mb-2">
+                Rules for {selectedStrategy.name}
+              </p>
+              <ul className="text-sm text-muted space-y-1 list-disc pl-5">
+                {strategyRules.map((rule, i) => (
+                  <li key={i}>{rule}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {selectedStrategy && (
+            <div>
+              <label className="label">
+                Did you follow {selectedStrategy.name} rules?
+              </label>
+              <select
+                className="input max-w-xs"
+                value={ruleFollowed}
+                onChange={(e) => setRuleFollowed(e.target.value)}
+              >
+                <option value="">—</option>
+                <option value="yes">Yes — followed all rules</option>
+                <option value="no">No — broke rules</option>
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="label">Journal notes</label>
@@ -607,7 +685,9 @@ function TradeJournalRow({
               type="button"
               className="btn btn-primary text-sm"
               disabled={pending}
-              onClick={() => onSave(trade.id, notes, mood, strategy, tags)}
+              onClick={() =>
+                onSave(trade.id, notes, mood, strategyId, ruleFollowed, tags)
+              }
             >
               {pending ? "Saving..." : "Save journal"}
             </button>

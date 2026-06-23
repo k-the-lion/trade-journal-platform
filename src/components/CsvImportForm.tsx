@@ -7,7 +7,6 @@ import {
   createTradingAccount,
   importCsvTrades,
 } from "@/lib/actions";
-import { DEFAULT_STRATEGIES } from "@/lib/constants/trade-meta";
 import {
   buildMappingFromHeaders,
   detectImportFormat,
@@ -54,9 +53,11 @@ type AccountOption = { id: string; name: string; is_default?: boolean };
 export function CsvImportForm({
   orgOptions = [],
   accountOptions: initialAccountOptions = [],
+  strategyOptions = [],
 }: {
   orgOptions?: { id: string; name: string }[];
   accountOptions?: AccountOption[];
+  strategyOptions?: { id: string; name: string }[];
 }) {
   const [accountOptions, setAccountOptions] = useState(initialAccountOptions);
   const defaultAccount =
@@ -297,13 +298,16 @@ export function CsvImportForm({
           value={importStrategy}
           onChange={(e) => setImportStrategy(e.target.value)}
         >
-          <option value="">Don&apos;t set — use file column if present</option>
-          {DEFAULT_STRATEGIES.map((s) => (
-            <option key={s} value={s}>{s}</option>
+          <option value="">Don&apos;t set — assign later on dashboard</option>
+          {strategyOptions.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
           ))}
         </select>
         <p className="text-xs text-muted mt-1">
-          Applies the same strategy to every trade in this CSV import.
+          Applies this strategy (and its rules) to every trade in this import.{" "}
+          <Link href="/strategies" className="text-primary hover:underline">
+            Manage strategies
+          </Link>
         </p>
       </div>
 
@@ -380,8 +384,8 @@ export function CsvImportForm({
                   onChange={(e) => setPostImportStrategy(e.target.value)}
                 >
                   <option value="">Choose strategy…</option>
-                  {DEFAULT_STRATEGIES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                  {strategyOptions.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>

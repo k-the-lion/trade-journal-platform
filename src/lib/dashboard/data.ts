@@ -1,11 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { BUCKET } from "@/lib/supabase/storage";
-import type { Trade, TradeScreenshot, TradingAccount } from "@/lib/types/database";
+import type { Trade, TradeScreenshot, TradingAccount, TradingStrategy } from "@/lib/types/database";
 
 export async function getDashboardData(userId: string) {
   const supabase = await createClient();
 
-  const [{ data: accounts }, { data: trades }] = await Promise.all([
+  const [{ data: accounts }, { data: strategies }, { data: trades }] = await Promise.all([
     supabase
       .from("trading_accounts")
       .select("*")
@@ -13,8 +13,15 @@ export async function getDashboardData(userId: string) {
       .order("is_default", { ascending: false })
       .order("name"),
     supabase
+      .from("trading_strategies")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .order("sort_order")
+      .order("name"),
+    supabase
       .from("trades")
-      .select("*, trade_tags(*), trade_screenshots(*), trading_accounts(*)")
+      .select("*, trade_tags(*), trade_screenshots(*), trading_accounts(*), trading_strategies(*)")
       .eq("user_id", userId)
       .order("traded_at", { ascending: false }),
   ]);
@@ -34,6 +41,7 @@ export async function getDashboardData(userId: string) {
 
   return {
     accounts: (accounts ?? []) as TradingAccount[],
+    strategies: (strategies ?? []) as TradingStrategy[],
     trades: tradesWithUrls,
   };
 }

@@ -1,25 +1,34 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createTrade, updateTrade } from "@/lib/actions";
-import { DEFAULT_STRATEGIES } from "@/lib/constants/trade-meta";
+import { parseStrategyRules } from "@/lib/constants/strategies";
 import { MoodPicker } from "@/components/MoodPicker";
-import type { AccountType, Trade, TradeDirection } from "@/lib/types/database";
+import type { AccountType, Trade, TradeDirection, TradingStrategy } from "@/lib/types/database";
 
 interface TradeFormProps {
   trade?: Trade;
   orgOptions?: { id: string; name: string }[];
   accountOptions?: { id: string; name: string }[];
+  strategyOptions?: TradingStrategy[];
 }
 
 export function TradeForm({
   trade,
   orgOptions = [],
   accountOptions = [],
+  strategyOptions = [],
 }: TradeFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [mood, setMood] = useState(trade?.emotional_state ?? "");
+  const [strategyId, setStrategyId] = useState(trade?.strategy_id ?? "");
+
+  const selectedStrategy = strategyOptions.find((s) => s.id === strategyId);
+  const strategyRules = selectedStrategy
+    ? parseStrategyRules(selectedStrategy.rules)
+    : [];
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -42,7 +51,7 @@ export function TradeForm({
       quantity: Number(fd.get("quantity")) || 1,
       pnl: Number(fd.get("pnl")),
       r_multiple: fd.get("r_multiple") ? Number(fd.get("r_multiple")) : null,
-      setup_tag: String(fd.get("setup_tag") || "") || null,
+      strategy_id: strategyId || null,
       notes: String(fd.get("notes") || "") || null,
       emotional_state: mood || String(fd.get("emotional_state") || "") || null,
       rule_followed:
@@ -141,24 +150,38 @@ export function TradeForm({
           <input id="r_multiple" name="r_multiple" type="number" step="any" className="input" defaultValue={trade?.r_multiple ?? ""} />
         </div>
         <div>
-          <label className="label" htmlFor="setup_tag">Strategy</label>
-          <select id="setup_tag" name="setup_tag" className="input" defaultValue={trade?.setup_tag ?? ""}>
+          <label className="label" htmlFor="strategy_id">Strategy</label>
+          <select
+            id="strategy_id"
+            className="input"
+            value={strategyId}
+            onChange={(e) => setStrategyId(e.target.value)}
+          >
             <option value="">—</option>
-            {DEFAULT_STRATEGIES.map((s) => (
-              <option key={s} value={s}>{s}</option>
+            {strategyOptions.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
+          {strategyOptions.length === 0 && (
+            <Link href="/strategies" className="text-xs text-primary hover:underline mt-1 inline-block">
+              Create strategies →
+            </Link>
+          )}
         </div>
-        <div>
-          <label className="label" htmlFor="rule_followed">Rule followed?</label>
-          <select id="rule_followed" name="rule_followed" className="input" defaultValue={
-            trade?.rule_followed === true ? "yes" : trade?.rule_followed === false ? "no" : ""
-          }>
-            <option value="">—</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
-        </div>
+        {selectedStrategy && (
+          <div>
+            <label className="label" htmlFor="rule_followed">
+              Followed {selectedStrategy.name} rules?
+            </label>
+            <select id="rule_followed" name="rule_followed" className="input" defaultValue={
+              trade?.rule_followed === true ? "yes" : trade?.rule_followed === false ? "no" : ""
+            }>
+              <option value="">—</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
+        )}
         {orgOptions.length > 0 && (
           <div>
             <label className="label" htmlFor="org_id">Organization</label>
@@ -171,6 +194,17 @@ export function TradeForm({
           </div>
         )}
       </div>
+
+      {selectedStrategy && strategyRules.length > 0 && (
+        <div className="rounded-lg border border-border/60 p-3 bg-background/40">
+          <p className="text-xs font-medium text-muted mb-2">Strategy rules</p>
+          <ul className="text-sm text-muted space-y-1 list-disc pl-5">
+            {strategyRules.map((rule, i) => (
+              <li key={i}>{rule}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div>
         <p className="label mb-2">How did you feel about this trade?</p>

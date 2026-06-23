@@ -6,6 +6,8 @@ import { createClient, getProfile } from "@/lib/supabase/server";
 import type { AccountType, TradeInput } from "@/lib/types/database";
 import { permanentlyDeleteTradesForUser } from "@/lib/trades/delete";
 import { BUCKET, tradeScreenshotPath } from "@/lib/supabase/storage";
+import { resolveStrategyFields } from "@/lib/strategies/sync";
+import { STRATEGY_TEMPLATES } from "@/lib/constants/strategies";
 import { normalizedToTradeInput, getImportAdapter } from "@/lib/imports/adapter";
 import {
   parseCsvTrades,
@@ -57,12 +59,124 @@ export async function createTradingAccount(data: {
   return account;
 }
 
+export async function createStrategy(data: {
+  name: string;
+  description?: string | null;
+  rules: string;
+}) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { data: strategy, error } = await supabase
+    .from("trading_strategies")
+    .insert({
+      user_id: profile.id,
+      name: data.name.trim(),
+      description: data.description?.trim() || null,
+      rules: data.rules.trim(),
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/strategies");
+  revalidatePath("/dashboard");
+  revalidatePath("/import");
+  return strategy;
+}
+
+export async function updateStrategy(
+  id: string,
+  data: {
+    name?: string;
+    description?: string | null;
+    rules?: string;
+    is_active?: boolean;
+  }
+) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { data: strategy, error } = await supabase
+    .from("trading_strategies")
+    .update(data)
+    .eq("id", id)
+    .eq("user_id", profile.id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  if (data.name) {
+    await supabase
+      .from("trades")
+      .update({ setup_tag: data.name.trim() })
+      .eq("user_id", profile.id)
+      .eq("strategy_id", id);
+  }
+
+  revalidatePath("/strategies");
+  revalidatePath("/dashboard");
+  revalidatePath("/import");
+  return strategy;
+}
+
+export async function deleteStrategy(id: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("trading_strategies")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", profile.id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/strategies");
+  revalidatePath("/dashboard");
+}
+
+export async function seedStrategyTemplates() {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { data: existing } = await supabase
+    .from("trading_strategies")
+    .select("name")
+    .eq("user_id", profile.id);
+
+  const names = new Set((existing ?? []).map((s) => s.name.toLowerCase()));
+  const toInsert = STRATEGY_TEMPLATES.filter(
+    (t) => !names.has(t.name.toLowerCase())
+  ).map((t, i) => ({
+    user_id: profile.id,
+    name: t.name,
+    description: t.description,
+    rules: t.rules,
+    sort_order: i,
+  }));
+
+  if (toInsert.length) {
+    const { error } = await supabase.from("trading_strategies").insert(toInsert);
+    if (error) throw new Error(error.message);
+  }
+
+  revalidatePath("/strategies");
+  return { added: toInsert.length };
+}
+
 export async function updateTradeJournal(
   tradeId: string,
   data: {
     notes?: string | null;
     emotional_state?: string | null;
     setup_tag?: string | null;
+    strategy_id?: string | null;
+    rule_followed?: boolean | null;
     tags?: string[];
   }
 ) {
@@ -70,7 +184,13 @@ export async function updateTradeJournal(
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
 
-  const { tags, ...tradeData } = data;
+  const { tags, strategy_id, ...rest } = data;
+  let tradeData = { ...rest };
+
+  if (strategy_id !== undefined) {
+    const fields = await resolveStrategyFields(supabase, profile.id, strategy_id);
+    tradeData = { ...tradeData, ...fields };
+  }
 
   const { error } = await supabase
     .from("trades")
@@ -172,12 +292,17 @@ export async function createTrade(input: TradeInput) {
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
 
-  const { tags, ...tradeData } = input;
+  const { tags, strategy_id, ...rest } = input;
+
+  const strategyFields = strategy_id
+    ? await resolveStrategyFields(supabase, profile.id, strategy_id)
+    : { strategy_id: null, setup_tag: rest.setup_tag ?? null };
 
   const { data: trade, error } = await supabase
     .from("trades")
     .insert({
-      ...tradeData,
+      ...rest,
+      ...strategyFields,
       user_id: profile.id,
       source: "manual",
     })
@@ -203,7 +328,15 @@ export async function updateTrade(id: string, input: Partial<TradeInput>) {
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
 
-  const { tags, ...tradeData } = input;
+  const { tags, strategy_id, ...rest } = input;
+
+  let tradeData: Record<string, unknown> = { ...rest };
+  if (strategy_id !== undefined) {
+    tradeData = {
+      ...tradeData,
+      ...(await resolveStrategyFields(supabase, profile.id, strategy_id)),
+    };
+  }
 
   const { error } = await supabase
     .from("trades")
@@ -392,16 +525,18 @@ export async function updatePlaybook(
   revalidatePath("/coach/playbook");
 }
 
-export async function bulkAssignStrategy(tradeIds: string[], strategy: string) {
+export async function bulkAssignStrategy(tradeIds: string[], strategyId: string) {
   const supabase = await createClient();
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
   if (!tradeIds.length) throw new Error("No trades selected");
-  if (!strategy.trim()) throw new Error("Choose a strategy");
+  if (!strategyId.trim()) throw new Error("Choose a strategy");
+
+  const fields = await resolveStrategyFields(supabase, profile.id, strategyId);
 
   const { error } = await supabase
     .from("trades")
-    .update({ setup_tag: strategy.trim() })
+    .update(fields)
     .eq("user_id", profile.id)
     .in("id", tradeIds);
 
@@ -416,12 +551,12 @@ export async function bulkAssignStrategy(tradeIds: string[], strategy: string) {
 
 export async function bulkAssignStrategyByImportJob(
   importJobId: string,
-  strategy: string
+  strategyId: string
 ) {
   const supabase = await createClient();
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
-  if (!strategy.trim()) throw new Error("Choose a strategy");
+  if (!strategyId.trim()) throw new Error("Choose a strategy");
 
   const { data: trades, error: fetchError } = await supabase
     .from("trades")
@@ -433,7 +568,7 @@ export async function bulkAssignStrategyByImportJob(
   const ids = (trades ?? []).map((t) => t.id);
   if (!ids.length) throw new Error("No trades found for this import");
 
-  return bulkAssignStrategy(ids, strategy);
+  return bulkAssignStrategy(ids, strategyId);
 }
 
 export async function importCsvTrades(
@@ -442,7 +577,7 @@ export async function importCsvTrades(
   orgId?: string | null,
   preset: ImportPreset = "auto",
   accountId?: string | null,
-  defaultSetupTag?: string | null
+  defaultStrategyId?: string | null
 ) {
   const supabase = await createClient();
   const profile = await getProfile();
@@ -484,14 +619,19 @@ export async function importCsvTrades(
 
   if (jobError) throw new Error(jobError.message);
 
+  const defaultStrategyFields = defaultStrategyId
+    ? await resolveStrategyFields(supabase, profile.id, defaultStrategyId)
+    : null;
+
   let imported = 0;
   const insertErrors: string[] = [...result.errors];
 
   for (const row of result.rows) {
     const tradeInput = normalizedToTradeInput(row, tradeSource, row.external_id);
-    const setupTag = defaultSetupTag?.trim()
-      ? defaultSetupTag.trim()
-      : tradeInput.setup_tag;
+    const strategyFields = defaultStrategyFields ?? {
+      strategy_id: null,
+      setup_tag: tradeInput.setup_tag,
+    };
 
     const { error } = await supabase.from("trades").upsert(
       {
@@ -505,7 +645,8 @@ export async function importCsvTrades(
         quantity: tradeInput.quantity,
         pnl: tradeInput.pnl,
         r_multiple: tradeInput.r_multiple,
-        setup_tag: setupTag,
+        setup_tag: strategyFields.setup_tag,
+        strategy_id: strategyFields.strategy_id,
         notes: tradeInput.notes,
         account_id: accountId ?? null,
         source: tradeSource,
@@ -528,7 +669,8 @@ export async function importCsvTrades(
           quantity: tradeInput.quantity,
           pnl: tradeInput.pnl,
           r_multiple: tradeInput.r_multiple,
-          setup_tag: setupTag,
+          setup_tag: strategyFields.setup_tag,
+          strategy_id: strategyFields.strategy_id,
           notes: tradeInput.notes,
           account_id: accountId ?? null,
           source: tradeSource,

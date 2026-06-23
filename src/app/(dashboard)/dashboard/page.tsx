@@ -6,7 +6,7 @@ import { TradeJournalBoard } from "@/components/TradeJournalBoard";
 export default async function DashboardPage() {
   const profile = await getProfile();
 
-  const { accounts, trades } = await getDashboardData(profile!.id);
+  const { accounts, strategies, trades } = await getDashboardData(profile!.id);
 
   return (
     <div className="space-y-8">
@@ -35,7 +35,11 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <TradeJournalBoard initialTrades={trades} accounts={accounts} />
+      <TradeJournalBoard
+        initialTrades={trades}
+        accounts={accounts}
+        strategies={strategies}
+      />
     </div>
   );
 }
