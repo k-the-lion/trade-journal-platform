@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ChatSessionSidebar } from "@/components/ChatSessionSidebar";
-import { createChatSession, cleanupUnusedChatSessions } from "@/lib/actions";
+import { openChatSession, cleanupUnusedChatSessions } from "@/lib/actions";
 import type { ChatMessage, ChatSession } from "@/lib/types/database";
 
 export default async function ChatPage({
@@ -15,9 +15,10 @@ export default async function ChatPage({
   const profile = await getProfile();
   if (!profile) redirect("/login");
 
+  await cleanupUnusedChatSessions();
+
   if (!sessionId) {
-    await cleanupUnusedChatSessions();
-    const fresh = await createChatSession("New Session");
+    const fresh = await openChatSession();
     redirect(`/chat?session=${fresh.id}`);
   }
 
@@ -29,7 +30,7 @@ export default async function ChatPage({
     .single();
 
   if (!session) {
-    const fresh = await createChatSession("New Session");
+    const fresh = await openChatSession();
     redirect(`/chat?session=${fresh.id}`);
   }
 
@@ -43,12 +44,19 @@ export default async function ChatPage({
 
   const { data: allSessions } = await supabase
     .from("chat_sessions")
-    .select("*")
+    .select("*, chat_messages(count)")
     .eq("user_id", profile.id)
     .order("updated_at", { ascending: false })
-    .limit(10);
+    .limit(30);
 
-  const sessionsList = (allSessions ?? []) as ChatSession[];
+  const sessionsList = ((allSessions ?? []) as (ChatSession & {
+    chat_messages: { count: number }[];
+  })[])
+    .filter((s) => {
+      const messageCount = s.chat_messages?.[0]?.count ?? 0;
+      return messageCount > 0 || s.id === activeSession.id;
+    })
+    .map(({ chat_messages: _cm, ...s }) => s as ChatSession);
 
   return (
     <div className="space-y-6">

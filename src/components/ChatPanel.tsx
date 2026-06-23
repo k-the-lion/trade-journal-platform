@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { ChatMessage, ChatSession } from "@/lib/types/database";
 
 export function ChatPanel({
@@ -10,7 +11,9 @@ export function ChatPanel({
   session: ChatSession;
   initialMessages: ChatMessage[];
 }) {
+  const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
+  const [sessionTitle, setSessionTitle] = useState(session.title);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -44,7 +47,7 @@ export function ChatPanel({
         body: JSON.stringify({ sessionId: session.id, message: userMsg }),
       });
       const raw = await res.text();
-      let data: { content?: string; error?: string } = {};
+      let data: { content?: string; error?: string; sessionTitle?: string } = {};
       if (raw) {
         try {
           data = JSON.parse(raw);
@@ -70,6 +73,10 @@ export function ChatPanel({
           created_at: new Date().toISOString(),
         },
       ]);
+      if (data.sessionTitle) {
+        setSessionTitle(data.sessionTitle);
+        router.refresh();
+      }
     } catch (err) {
       setMessages((prev) => [
         ...prev,
@@ -89,7 +96,7 @@ export function ChatPanel({
   return (
     <div className="card flex flex-col h-[calc(100vh-12rem)] max-w-3xl">
       <div className="px-4 py-3 border-b border-border">
-        <h2 className="font-medium">{session.title}</h2>
+        <h2 className="font-medium">{sessionTitle}</h2>
         <p className="text-xs text-muted mt-0.5">
           Educational coaching only — not financial advice.
         </p>

@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/ai/context";
 import { normalizeChatMessages } from "@/lib/ai/messages";
+import { isDefaultChatTitle, titleFromMessage } from "@/lib/ai/title";
 import type { CoachingPlaybook, Trade } from "@/lib/types/database";
 
 const MODEL = "claude-haiku-4-5-20251001";
@@ -47,6 +48,18 @@ export async function POST(request: Request) {
       role: "user",
       content: message.trim(),
     });
+
+    let sessionTitle = session.title;
+    if (isDefaultChatTitle(session.title)) {
+      sessionTitle = titleFromMessage(message);
+      await supabase
+        .from("chat_sessions")
+        .update({
+          title: sessionTitle,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", sessionId);
+    }
 
     const { data: trades } = await supabase
       .from("trades")
@@ -154,7 +167,7 @@ export async function POST(request: Request) {
       .update({ updated_at: new Date().toISOString() })
       .eq("id", sessionId);
 
-    return NextResponse.json({ content: assistantContent });
+    return NextResponse.json({ content: assistantContent, sessionTitle });
   } catch (err) {
     console.error("Chat API error:", err);
     const errMessage =

@@ -713,9 +713,39 @@ export async function importCsvTrades(
 }
 
 export async function startNewChatSession() {
-  await cleanupUnusedChatSessions();
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  await supabase.rpc("cleanup_empty_chat_sessions", { p_user_id: profile.id });
   const session = await createChatSession("New Session");
   redirect(`/chat?session=${session.id}`);
+}
+
+export async function openChatSession() {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  await supabase.rpc("cleanup_empty_chat_sessions", { p_user_id: profile.id });
+
+  const { data: emptyId, error: findError } = await supabase.rpc(
+    "find_empty_chat_session",
+    { p_user_id: profile.id }
+  );
+
+  if (findError) throw new Error(findError.message);
+  if (emptyId) {
+    const { data: existing } = await supabase
+      .from("chat_sessions")
+      .select("*")
+      .eq("id", emptyId)
+      .eq("user_id", profile.id)
+      .single();
+    if (existing) return existing;
+  }
+
+  return createChatSession("New Session");
 }
 
 export async function deleteChatSession(sessionId: string) {
@@ -754,30 +784,7 @@ export async function cleanupUnusedChatSessions() {
   const profile = await getProfile();
   if (!profile) return;
 
-  const { data: sessions } = await supabase
-    .from("chat_sessions")
-    .select("id")
-    .eq("user_id", profile.id);
-
-  if (!sessions?.length) return;
-
-  const sessionIds = sessions.map((s) => s.id);
-  const { data: messages } = await supabase
-    .from("chat_messages")
-    .select("session_id")
-    .in("session_id", sessionIds);
-
-  const usedIds = new Set((messages ?? []).map((m) => m.session_id));
-  const emptyIds = sessionIds.filter((id) => !usedIds.has(id));
-
-  if (emptyIds.length === 0) return;
-
-  await supabase.from("chat_messages").delete().in("session_id", emptyIds);
-  await supabase
-    .from("chat_sessions")
-    .delete()
-    .in("id", emptyIds)
-    .eq("user_id", profile.id);
+  await supabase.rpc("cleanup_empty_chat_sessions", { p_user_id: profile.id });
 }
 
 export async function createChatSession(title?: string) {
