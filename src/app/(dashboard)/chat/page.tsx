@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ChatSessionSidebar } from "@/components/ChatSessionSidebar";
-import { createChatSession } from "@/lib/actions";
+import { createChatSession, cleanupUnusedChatSessions } from "@/lib/actions";
 import type { ChatMessage, ChatSession } from "@/lib/types/database";
 
 export default async function ChatPage({
@@ -16,6 +16,7 @@ export default async function ChatPage({
   if (!profile) redirect("/login");
 
   if (!sessionId) {
+    await cleanupUnusedChatSessions();
     const fresh = await createChatSession("New Session");
     redirect(`/chat?session=${fresh.id}`);
   }

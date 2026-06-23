@@ -25,7 +25,7 @@ export function ChatSessionSidebar({
       try {
         await deleteChatSession(sessionId);
         if (sessionId === activeSessionId) {
-          router.push("/chat");
+          router.replace("/chat");
         } else {
           router.refresh();
         }

@@ -713,6 +713,7 @@ export async function importCsvTrades(
 }
 
 export async function startNewChatSession() {
+  await cleanupUnusedChatSessions();
   const session = await createChatSession("New Session");
   redirect(`/chat?session=${session.id}`);
 }
@@ -722,6 +723,22 @@ export async function deleteChatSession(sessionId: string) {
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
 
+  const { data: session } = await supabase
+    .from("chat_sessions")
+    .select("id")
+    .eq("id", sessionId)
+    .eq("user_id", profile.id)
+    .maybeSingle();
+
+  if (!session) throw new Error("Session not found");
+
+  const { error: messagesError } = await supabase
+    .from("chat_messages")
+    .delete()
+    .eq("session_id", sessionId);
+
+  if (messagesError) throw new Error(messagesError.message);
+
   const { error } = await supabase
     .from("chat_sessions")
     .delete()
@@ -730,6 +747,37 @@ export async function deleteChatSession(sessionId: string) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/chat");
+}
+
+export async function cleanupUnusedChatSessions() {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) return;
+
+  const { data: sessions } = await supabase
+    .from("chat_sessions")
+    .select("id")
+    .eq("user_id", profile.id);
+
+  if (!sessions?.length) return;
+
+  const sessionIds = sessions.map((s) => s.id);
+  const { data: messages } = await supabase
+    .from("chat_messages")
+    .select("session_id")
+    .in("session_id", sessionIds);
+
+  const usedIds = new Set((messages ?? []).map((m) => m.session_id));
+  const emptyIds = sessionIds.filter((id) => !usedIds.has(id));
+
+  if (emptyIds.length === 0) return;
+
+  await supabase.from("chat_messages").delete().in("session_id", emptyIds);
+  await supabase
+    .from("chat_sessions")
+    .delete()
+    .in("id", emptyIds)
+    .eq("user_id", profile.id);
 }
 
 export async function createChatSession(title?: string) {
