@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   bulkAssignStrategyByImportJob,
   createTradingAccount,
@@ -36,6 +36,7 @@ const PRESET_OPTIONS: { value: ImportPreset; label: string }[] = [
   { value: "tradovate_orders", label: "Tradovate (Orders / Fills)" },
   { value: "tradingview_balance", label: "TradingView (Balance History)" },
   { value: "tradingview_orders", label: "TradingView (Order History)" },
+  { value: "tradingview_journal", label: "TradingView (Trading journal)" },
   { value: "generic", label: "Generic CSV / spreadsheet" },
 ];
 
@@ -48,9 +49,11 @@ const EXPORT_GUIDES: Record<ImportPreset, string> = {
   tradovate_orders:
     "Tradovate → Reports → Orders tab (NOT Performance) → Download CSV. Orders lack round-trip P&L.",
   tradingview_balance:
-    "TradingView → Paper Trading / Broker panel → Balance History tab → export CSV. Best — each row is a closed trade with P&L.",
+    "TradingView → Paper Trading panel → Balance History tab → Export data. Each row is a closed trade with realized P&L.",
   tradingview_orders:
-    "TradingView → Order History tab → ⋯ menu → enable all columns → export. We pair buy/sell fills into trades.",
+    "TradingView → Order History tab → ⋯ enable all columns → Export data. We pair buy/sell fills into round trips.",
+  tradingview_journal:
+    "Strategy Tester “List of Trades” export only (Trade # + Type columns). The Paper Trading Trading journal tab is an activity log — use Balance History instead.",
   generic: "Any CSV with date, symbol, and P&L columns. Map columns below if needed.",
 };
 
@@ -70,8 +73,12 @@ export function CsvImportForm({
     accountOptions.find((a) => a.is_default) ?? accountOptions[0];
 
   const [csvText, setCsvText] = useState("");
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [preset, setPreset] = useState<ImportPreset>("auto");
   const [detectedLabel, setDetectedLabel] = useState<string | null>(null);
+  const [unsupportedReason, setUnsupportedReason] = useState<string | null>(null);
   const [mapping, setMapping] = useState<CsvColumnMapping>({});
   const [headers, setHeaders] = useState<string[]>([]);
   const [result, setResult] = useState<{
@@ -132,13 +139,17 @@ export function CsvImportForm({
     }
   }
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function loadCsvFile(file: File) {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      alert("Please choose a .csv file exported from your broker.");
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result);
       setCsvText(text);
+      setFileName(file.name);
       setResult(null);
 
       const { headers: cols } = parseCsvRows(text);
@@ -147,13 +158,36 @@ export function CsvImportForm({
 
       const detected = detectImportFormat(text);
       setDetectedLabel(detected.label);
+      setUnsupportedReason(
+        detected.unsupported ? detected.unsupportedReason ?? detected.label : null
+      );
+      if (preset === "auto" && !detected.unsupported) {
+        setPreset(detected.preset);
+      }
     };
     reader.readAsText(file);
+  }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    loadCsvFile(file);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) loadCsvFile(file);
   }
 
   async function handleImport(e: React.FormEvent) {
     e.preventDefault();
     if (!csvText) return;
+    if (unsupportedReason) {
+      alert(unsupportedReason);
+      return;
+    }
     if (!accountId) {
       alert("Choose or create a trading account before importing.");
       return;
@@ -293,9 +327,6 @@ export function CsvImportForm({
           ))}
         </select>
         <p className="text-xs text-muted mt-2">{activeGuide}</p>
-        {detectedLabel && preset === "auto" && (
-          <p className="text-xs text-primary mt-1">Detected: {detectedLabel}</p>
-        )}
       </div>
 
       <div>
@@ -319,13 +350,87 @@ export function CsvImportForm({
       </div>
 
       <div>
-        <label className="label">Upload CSV file</label>
+        <label className="label">CSV file</label>
         <input
+          ref={fileInputRef}
           type="file"
           accept=".csv,text/csv"
           onChange={handleFile}
-          className="text-sm text-muted w-full"
+          className="sr-only"
         />
+        <div
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
+          }}
+          onClick={() => fileInputRef.current?.click()}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            setDragActive(true);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setDragActive(false);
+          }}
+          onDrop={handleDrop}
+          className={`rounded-xl border-2 border-dashed p-8 text-center cursor-pointer transition-colors ${
+            dragActive
+              ? "border-primary bg-primary/10"
+              : fileName
+                ? "border-success/40 bg-success/5"
+                : "border-border/80 bg-background/30 hover:border-primary/50 hover:bg-primary/5"
+          }`}
+        >
+          {fileName ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-foreground">{fileName}</p>
+              <p className="text-xs text-muted">
+                {headers.length > 0
+                  ? `${headers.length} columns detected`
+                  : "File loaded"}
+                {detectedLabel ? ` · ${detectedLabel}` : ""}
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm mt-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+              >
+                Choose a different file
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xl">
+                ↑
+              </div>
+              <div>
+                <p className="text-sm font-medium">Drop your CSV here</p>
+                <p className="text-xs text-muted mt-1">
+                  or click to browse — TradingView Balance History, TopStep X, Tradovate, etc.
+                </p>
+              </div>
+              <span className="btn btn-primary text-sm pointer-events-none">
+                Choose CSV file
+              </span>
+            </div>
+          )}
+        </div>
+        {unsupportedReason && (
+          <p className="text-xs text-danger mt-2 rounded-md border border-danger/30 bg-danger/10 p-2">
+            {unsupportedReason}
+          </p>
+        )}
+        {detectedLabel && preset === "auto" && !unsupportedReason && (
+          <p className="text-xs text-primary mt-2">Detected: {detectedLabel}</p>
+        )}
       </div>
 
       {orgOptions.length > 0 && (
@@ -428,7 +533,7 @@ export function CsvImportForm({
       <button
         type="submit"
         className="btn btn-primary"
-        disabled={!csvText || loading || !accountId}
+        disabled={!csvText || loading || !accountId || Boolean(unsupportedReason)}
       >
         {loading ? "Importing..." : "Import trades"}
       </button>

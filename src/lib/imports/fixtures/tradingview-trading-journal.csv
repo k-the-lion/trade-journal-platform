@@ -1,0 +1,51 @@
+Time,Text
+2026-06-08 09:17:36,Order 3158722279 for symbol CME_MINI:MNQ1! has been executed at price 29723.00 for 4 units
+2026-06-08 09:17:36,Order 3158722279 successfully placed
+2026-06-08 09:17:36,Order 3158702365 successfully cancelled
+2026-06-08 09:17:36,Order 3158702364 successfully cancelled
+2026-06-08 09:17:36,Call to place market order to sell 4 units of symbol CME_MINI:MNQ1! 
+2026-06-08 09:16:40,Order 3158717534 for symbol CME_MINI:MNQ1! has been executed at price 29731.50 for 1 units
+2026-06-08 09:16:40,Order 3158717534 successfully placed
+2026-06-08 09:16:40,Call to place market order to sell 1 units of symbol CME_MINI:MNQ1! 
+2026-06-08 09:16:24,Order 3158716125 for symbol CME_MINI:MNQ1! has been executed at price 29728.00 for 1 units
+2026-06-08 09:16:24,Order 3158716125 successfully placed
+2026-06-08 09:16:24,Call to place market order to sell 1 units of symbol CME_MINI:MNQ1! 
+2026-06-08 09:16:17,Order 3158702365 modification confirmed
+2026-06-08 09:16:17,Order 3158702364 modification confirmed
+2026-06-08 09:16:17,Modify position for symbol CME_MINI:MNQ1! with SL 29708.50 and TP 29742.25
+2026-06-08 09:16:14,Order 3158702365 modification confirmed
+2026-06-08 09:16:14,Order 3158702364 modification confirmed
+2026-06-08 09:16:14,Modify position for symbol CME_MINI:MNQ1! with SL 29708.50 and TP 29739.75
+2026-06-08 09:16:03,Order 3158713955 for symbol CME_MINI:MNQ1! has been executed at price 29728.00 for 1 units
+2026-06-08 09:16:03,Order 3158713955 successfully placed
+2026-06-08 09:16:03,Call to place market order to sell 1 units of symbol CME_MINI:MNQ1! 
+2026-06-08 09:14:17,Order 3158702365 modification confirmed
+2026-06-08 09:14:17,Order 3158702364 modification confirmed
+2026-06-08 09:14:17,Modify position for symbol CME_MINI:MNQ1! with SL 29710.75 and TP 29739.75
+2026-06-08 09:14:14,Order 3158702365 modification confirmed
+2026-06-08 09:14:14,Order 3158702364 modification confirmed
+2026-06-08 09:14:14,Modify position for symbol CME_MINI:MNQ1! with SL 29710.75 and TP 29740.00
+2026-06-08 09:14:11,Order 3158702365 modification confirmed
+2026-06-08 09:14:11,Order 3158702364 modification confirmed
+2026-06-08 09:14:11,Modify position for symbol CME_MINI:MNQ1! with SL 29712.75 and TP 29740.00
+2026-06-08 09:14:05,Order 3158702364 activated at price 29712.75
+2026-06-08 09:14:05,Order 3158702365 activated at price 29741.25
+2026-06-08 09:14:05,Order 3158702363 for symbol CME_MINI:MNQ1! has been executed at price 29725.25 for 7 units
+2026-06-08 09:14:05,Order 3158702365 successfully placed
+2026-06-08 09:14:05,Order 3158702364 successfully placed
+2026-06-08 09:14:05,Order 3158702363 successfully placed
+2026-06-08 09:14:05,Call to place market order to buy 7 units of symbol CME_MINI:MNQ1! with SL 29712.75 and TP 29741.25
+2026-06-08 09:13:55,Order 3158701445 for symbol CME_MINI:MNQ1! has been executed at price 29726.50 for 10 units
+2026-06-08 09:13:55,Order 3158701445 successfully placed
+2026-06-08 09:13:55,Order 3158700295 successfully cancelled
+2026-06-08 09:13:55,Order 3158700294 successfully cancelled
+2026-06-08 09:13:55,Call to place market order to sell 10 units of symbol CME_MINI:MNQ1! 
+2026-06-08 09:13:48,Order 3158700295 modification confirmed
+2026-06-08 09:13:48,Order 3158700294 modification confirmed
+2026-06-08 09:13:48,Modify position for symbol CME_MINI:MNQ1! with SL 29712.75 and TP 29733.25
+2026-06-08 09:13:46,Order 3158700295 modification confirmed
+2026-06-08 09:13:46,Order 3158700294 modification confirmed
+2026-06-08 09:13:46,Modify position for symbol CME_MINI:MNQ1! with SL 29714.75 and TP 29733.25
+2026-06-08 09:13:41,Order 3158700294 activated at price 29714.75
+2026-06-08 09:13:41,Order 3158700295 activated at price 29734.75
+2026-06-08 09:13:41,Order 3158700293 for symbol CME_MINI:MNQ1! has been executed at price 29723.00 for 10 units

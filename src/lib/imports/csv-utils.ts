@@ -66,12 +66,29 @@ export function findColumn(
     if (exact) return exact;
   }
   for (const alias of aliases) {
+    if (alias.length < 4) continue;
     const partial = trimmed.find((h) =>
       h.toLowerCase().includes(alias.toLowerCase())
     );
     if (partial) return partial;
   }
   return undefined;
+}
+
+export function findPnlColumn(headers: string[]): string | undefined {
+  const trimmed = headers.map((h) => h.trim());
+  return trimmed.find((h) => {
+    const lower = h.toLowerCase();
+    return (
+      (lower.includes("p&l") ||
+        lower.includes("pnl") ||
+        lower.includes("profit") ||
+        lower === "pl") &&
+      !lower.includes("time") &&
+      !lower.includes("price") &&
+      !lower.includes("balance")
+    );
+  });
 }
 
 export function parseDirection(raw: string | undefined): "long" | "short" {
@@ -106,6 +123,16 @@ export function parseDate(raw: string | undefined): string | null {
     const [, mm, dd, yyyy, time, tz] = tzMatch;
     const iso = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}T${time}${tz}`;
     const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+
+  // YYYY-MM-DD HH:mm:ss (TradingView paper trading exports)
+  const isoSpace = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})\s+(\d{1,2}:\d{2}:\d{2})(?:\.\d+)?$/
+  );
+  if (isoSpace) {
+    const [, yyyy, mm, dd, time] = isoSpace;
+    const d = new Date(`${yyyy}-${mm}-${dd}T${time}`);
     if (!Number.isNaN(d.getTime())) return d.toISOString();
   }
 

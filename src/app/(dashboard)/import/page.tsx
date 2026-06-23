@@ -80,16 +80,39 @@ export default async function ImportPage() {
         </div>
         <div className="card p-5 space-y-2">
           <h2 className="font-medium text-sm">TradingView</h2>
-          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
-            <li>Open your broker panel in TradingView (Paper Trading or connected broker)</li>
-            <li>
-              <strong className="text-foreground">Balance History</strong> (recommended) — each row is a closed trade with P&L
-            </li>
-            <li>
-              Or <strong className="text-foreground">Order History</strong> — use the ⋯ menu to show all columns before export
-            </li>
-            <li>Upload here — choose TradingView preset or Auto-detect</li>
-          </ol>
+          <p className="text-xs text-muted">
+            Paper Trading → ⋯ menu → enable all columns → Export data from the active tab.
+          </p>
+          <table className="w-full text-xs mt-2">
+            <thead>
+              <tr className="text-muted text-left">
+                <th className="pb-1 font-normal">Tab</th>
+                <th className="pb-1 font-normal">Import?</th>
+              </tr>
+            </thead>
+            <tbody className="text-muted">
+              <tr>
+                <td className="py-1 text-foreground">Balance History</td>
+                <td className="py-1 text-success">Yes — best</td>
+              </tr>
+              <tr>
+                <td className="py-1 text-foreground">Order History</td>
+                <td className="py-1 text-success">Yes</td>
+              </tr>
+              <tr>
+                <td className="py-1 text-foreground">Trading journal</td>
+                <td className="py-1 text-danger">No — activity log</td>
+              </tr>
+              <tr>
+                <td className="py-1 text-foreground">Positions</td>
+                <td className="py-1 text-danger">No — open only</td>
+              </tr>
+              <tr>
+                <td className="py-1 text-foreground">Orders</td>
+                <td className="py-1 text-danger">No — pending only</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import type { ImportAdapter, ImportAdapterResult, NormalizedTradeRow } from "./adapter";
 import {
   findColumn,
+  findPnlColumn,
   inferDirectionFromPrices,
   normalizeSymbol,
   parseCsvRows,
@@ -9,7 +10,256 @@ import {
   parseNumber,
 } from "./csv-utils";
 
-export type TradingViewMode = "auto" | "balance" | "orders" | "list_of_trades";
+export type TradingViewMode =
+  | "auto"
+  | "balance"
+  | "orders"
+  | "journal"
+  | "list_of_trades";
+
+export type TradingViewExportKind =
+  | "balance_history"
+  | "balance_ledger"
+  | "order_history"
+  | "trading_journal"
+  | "activity_log"
+  | "positions"
+  | "working_orders"
+  | "unknown";
+
+const CLOSE_ACTION_RE =
+  /Close (long|short) position for symbol (\S+) at price ([\d.]+) for (\d+) units\. Position AVG Price was ([\d.]+)/i;
+
+const FILLED_STATUSES = new Set([
+  "filled",
+  "complete",
+  "completed",
+  "executed",
+  "closed",
+]);
+
+const WORKING_STATUSES = new Set([
+  "working",
+  "inactive",
+  "placing",
+  "cancelled",
+  "canceled",
+  "rejected",
+  "expired",
+  "pending",
+]);
+
+export function classifyTradingViewExport(
+  headers: string[],
+  rows: Record<string, string>[]
+): { kind: TradingViewExportKind; message?: string } {
+  const has = (aliases: string[]) => Boolean(findColumn(headers, aliases));
+
+  // Paper Trading Balance History — ledger rows with Action text (no Symbol column)
+  if (
+    has(["Action"]) &&
+    has(["Realized PnL (value)", "Realized PnL", "Realized PNL"])
+  ) {
+    return { kind: "balance_ledger" };
+  }
+
+  // Paper Trading Trading journal tab — activity log, not structured trades
+  if (has(["Text"]) && has(["Time"]) && !has(["Symbol", "Ticker"])) {
+    return {
+      kind: "activity_log",
+      message:
+        "TradingView Trading journal is an activity log, not trade data. Export Balance History (best) or Order History instead.",
+    };
+  }
+
+  if (
+    has(["Unrealized P&L", "Unrealized PnL", "Unrealized PL"]) ||
+    (has(["Take Profit", "Stop Loss"]) && has(["Avg Fill Price", "Average Fill Price"]))
+  ) {
+    return {
+      kind: "positions",
+      message:
+        "This looks like TradingView Positions (open positions). Export Balance History or Order History instead — completed trades with P&L.",
+    };
+  }
+
+  if (
+    has(["Trade #", "Trade#", "Trade Number"]) &&
+    has(["Type"]) &&
+    rows.some((row) => {
+      const typeCol = findColumn(headers, ["Type"])!;
+      const type = row[typeCol]?.toLowerCase() ?? "";
+      return type.includes("entry") || type.includes("exit");
+    })
+  ) {
+    return { kind: "trading_journal" };
+  }
+
+  const pnlCol = findPnlColumn(headers);
+  const statusCol = findColumn(headers, ["Status"]);
+  const closingCol = findColumn(headers, [
+    "Closing Time",
+    "Closing time",
+    "Close Time",
+    "Fill Time",
+  ]);
+  const symbolCol = findColumn(headers, ["Symbol", "Ticker"]);
+  const sideCol = findColumn(headers, ["Side", "B/S", "Buy/Sell"]);
+  const fillPriceCol = findColumn(headers, [
+    "Fill price",
+    "Fill Price",
+    "Avg Fill Price",
+  ]);
+
+  if (symbolCol && sideCol && fillPriceCol && (statusCol || closingCol)) {
+    const statusValues = statusCol
+      ? rows
+          .map((r) => r[statusCol]?.toLowerCase().trim() ?? "")
+          .filter(Boolean)
+      : [];
+    const filledCount = statusValues.filter((s) => FILLED_STATUSES.has(s)).length;
+    const workingCount = statusValues.filter((s) => WORKING_STATUSES.has(s)).length;
+    const hasClosingTimes = closingCol
+      ? rows.filter((r) => r[closingCol]?.trim()).length
+      : 0;
+
+    if (
+      statusValues.length > 0 &&
+      workingCount > filledCount &&
+      hasClosingTimes < rows.length / 2
+    ) {
+      return {
+        kind: "working_orders",
+        message:
+          "This looks like TradingView Orders (pending/working orders). Export Order History or Balance History for completed trades.",
+      };
+    }
+
+    if (filledCount > 0 || hasClosingTimes >= Math.max(1, rows.length / 2)) {
+      return { kind: "order_history" };
+    }
+
+    if (!pnlCol && !closingCol) {
+      return {
+        kind: "working_orders",
+        message:
+          "This CSV has no filled trades or P&L. Export Balance History (best) or Order History from TradingView.",
+      };
+    }
+  }
+
+  if (pnlCol && rows.some((r) => r[pnlCol]?.trim())) {
+    return { kind: "balance_history" };
+  }
+
+  if (symbolCol && pnlCol) {
+    return { kind: "balance_history" };
+  }
+
+  if (symbolCol && sideCol) {
+    return { kind: "order_history" };
+  }
+
+  return { kind: "unknown" };
+}
+
+function unsupportedResult(
+  message: string,
+  errors: string[],
+  skipped: number
+): ImportAdapterResult {
+  return {
+    rows: [],
+    errors: [...errors, message],
+    skipped,
+  };
+}
+
+function parseBalanceLedgerRows(
+  headers: string[],
+  rows: Record<string, string>[],
+  errors: string[]
+): ImportAdapterResult {
+  const col = {
+    time: findColumn(headers, ["Time", "Date", "Timestamp"]),
+    pnl: findColumn(headers, [
+      "Realized PnL (value)",
+      "Realized PnL",
+      "Realized PNL",
+    ]),
+    action: findColumn(headers, ["Action"]),
+  };
+
+  if (!col.time || !col.pnl || !col.action) {
+    return {
+      rows: [],
+      errors: [
+        ...errors,
+        "TradingView Balance History export is missing Time, Realized PnL, or Action columns.",
+      ],
+      skipped: rows.length,
+    };
+  }
+
+  const result: NormalizedTradeRow[] = [];
+  let skipped = 0;
+
+  rows.forEach((row, index) => {
+    const action = row[col.action!]?.trim();
+    if (!action) {
+      skipped++;
+      return;
+    }
+
+    const match = action.match(CLOSE_ACTION_RE);
+    if (!match) {
+      skipped++;
+      return;
+    }
+
+    const [, dirWord, symbolRaw, exitRaw, qtyRaw, entryRaw] = match;
+    const traded_at = parseDate(row[col.time!]);
+    if (!traded_at) {
+      skipped++;
+      errors.push(`Row ${index + 2}: invalid or missing time`);
+      return;
+    }
+
+    const pnl = parseNumber(row[col.pnl!]);
+    if (pnl === null) {
+      skipped++;
+      errors.push(`Row ${index + 2}: invalid P&L`);
+      return;
+    }
+
+    const direction = dirWord.toLowerCase() === "short" ? "short" : "long";
+    const exit_price = parseNumber(exitRaw);
+    const entry_price = parseNumber(entryRaw);
+    const quantity = parseNumber(qtyRaw) ?? 1;
+    const symbol = normalizeSymbol(symbolRaw);
+
+    result.push({
+      traded_at,
+      symbol,
+      direction,
+      entry_price,
+      exit_price,
+      quantity: Math.abs(quantity),
+      pnl,
+      setup_tag: "TradingView",
+      notes: null,
+      external_id: `tv-ledger-${traded_at.slice(0, 19)}-${symbol}-${pnl}-${quantity}`,
+    });
+  });
+
+  if (result.length === 0) {
+    errors.push(
+      "No closed trades found in Balance History. Rows must contain “Close long/short position…” actions."
+    );
+  }
+
+  return { rows: result, errors, skipped };
+}
 
 function parseBalanceOrJournalRows(
   headers: string[],
@@ -26,6 +276,7 @@ function parseBalanceOrJournalRows(
       "Exit Time",
       "Time",
       "Date and time",
+      "Date/Time",
       "Date",
       "Timestamp",
     ]),
@@ -45,16 +296,8 @@ function parseBalanceOrJournalRows(
       "Avg Exit",
       "Exit",
     ]),
-    pnl: findColumn(headers, [
-      "Net P&L",
-      "P&L",
-      "PnL",
-      "Profit",
-      "PL",
-      "Realized P&L",
-    ]),
+    pnl: findPnlColumn(headers),
     qty: findColumn(headers, ["Qty", "Quantity", "Size", "Contracts"]),
-    commission: findColumn(headers, ["Commission", "Commissions", "Fee", "Fees"]),
     id: findColumn(headers, [
       "Order ID",
       "Order Id",
@@ -71,7 +314,7 @@ function parseBalanceOrJournalRows(
       rows: [],
       errors: [
         ...errors,
-        "TradingView export needs Symbol and P&L columns. Use Balance History (recommended) or enable all columns before export.",
+        "TradingView Balance History needs Symbol and P&L columns. Use the Balance History tab export.",
       ],
       skipped: rows.length,
     };
@@ -128,7 +371,7 @@ function parseBalanceOrJournalRows(
   return { rows: result, errors, skipped };
 }
 
-/** TradingView "List of Trades" / paired Entry+Exit rows */
+/** TradingView Trading journal / List of Trades (Entry + Exit rows) */
 function parseListOfTrades(
   headers: string[],
   rows: Record<string, string>[],
@@ -136,25 +379,40 @@ function parseListOfTrades(
 ): ImportAdapterResult {
   const col = {
     tradeNum: findColumn(headers, ["Trade #", "Trade#", "Trade Number"]),
+    symbol: findColumn(headers, ["Symbol", "Ticker", "Instrument"]),
     type: findColumn(headers, ["Type"]),
-    time: findColumn(headers, ["Date and time", "Date/Time", "Time", "Date"]),
+    time: findColumn(headers, [
+      "Date and time",
+      "Date/Time",
+      "Date/Time",
+      "Time",
+      "Date",
+      "Closing Time",
+    ]),
     price: findColumn(headers, ["Price", "Fill Price"]),
-    qty: findColumn(headers, ["Qty", "Quantity"]),
-    pnl: findColumn(headers, ["Net P&L", "P&L", "PnL"]),
+    qty: findColumn(headers, ["Qty", "Quantity", "Contracts", "Size"]),
+    pnl: findPnlColumn(headers),
     id: findColumn(headers, ["Trade #", "Order ID"]),
   };
 
   if (!col.tradeNum || !col.type) {
     return {
       rows: [],
-      errors: [...errors, "Not a List of Trades format (missing Trade # / Type columns)."],
+      errors: [
+        ...errors,
+        "Not a Trading journal export (missing Trade # / Type columns). Use Balance History instead.",
+      ],
       skipped: rows.length,
     };
   }
 
   const byTrade = new Map<
     string,
-    { entry?: Record<string, string>; exit?: Record<string, string> }
+    {
+      entry?: Record<string, string>;
+      exit?: Record<string, string>;
+      symbol?: string;
+    }
   >();
 
   for (const row of rows) {
@@ -163,6 +421,10 @@ function parseListOfTrades(
     if (!num) continue;
 
     const bucket = byTrade.get(num) ?? {};
+    if (col.symbol) {
+      const sym = row[col.symbol]?.trim();
+      if (sym) bucket.symbol = sym;
+    }
     if (type.includes("entry")) bucket.entry = row;
     else if (type.includes("exit")) bucket.exit = row;
     byTrade.set(num, bucket);
@@ -180,7 +442,7 @@ function parseListOfTrades(
     }
 
     const pnlRaw = col.pnl ? exitRow[col.pnl] : undefined;
-    const pnl = pnlRaw ? parseNumber(pnlRaw) : 0;
+    const pnl = pnlRaw !== undefined && pnlRaw !== "" ? parseNumber(pnlRaw) : 0;
     if (pnl === null) {
       skipped++;
       return;
@@ -201,11 +463,18 @@ function parseListOfTrades(
     const qty =
       col.qty && exitRow[col.qty]
         ? parseNumber(exitRow[col.qty]) ?? 1
-        : 1;
+        : entryRow && col.qty && entryRow[col.qty]
+          ? parseNumber(entryRow[col.qty]) ?? 1
+          : 1;
+
+    const symbolRaw =
+      pair.symbol ||
+      (col.symbol ? exitRow[col.symbol!] : undefined) ||
+      (entryRow && col.symbol ? entryRow[col.symbol!] : undefined);
 
     result.push({
       traded_at,
-      symbol: "UNKNOWN",
+      symbol: symbolRaw ? normalizeSymbol(symbolRaw) : "UNKNOWN",
       direction,
       entry_price: entryPrice,
       exit_price: exitPrice,
@@ -219,7 +488,7 @@ function parseListOfTrades(
 
   if (result.length === 0) {
     errors.push(
-      "No completed trades found in List of Trades format. Use Balance History export instead."
+      "No completed trades found in Trading journal export. Balance History is the easiest import."
     );
   }
 
@@ -234,20 +503,34 @@ function parseOrderHistory(
   const col = {
     time: findColumn(headers, [
       "Closing Time",
+      "Closing time",
       "Close Time",
       "Time",
       "Date",
       "Timestamp",
       "Fill Time",
+      "Placing time",
+      "Placing Time",
     ]),
     symbol: findColumn(headers, ["Symbol", "Ticker", "Contract"]),
     side: findColumn(headers, ["Side", "B/S", "Buy/Sell", "Direction"]),
-    price: findColumn(headers, ["Fill Price", "Avg Fill Price", "Price"]),
+    price: findColumn(headers, [
+      "Fill price",
+      "Fill Price",
+      "Avg Fill Price",
+      "Price",
+    ]),
     qty: findColumn(headers, ["Qty", "Quantity"]),
-    pnl: findColumn(headers, ["P&L", "PnL", "Profit", "Net P&L", "PL"]),
+    pnl: findPnlColumn(headers),
     status: findColumn(headers, ["Status"]),
-    id: findColumn(headers, ["Order ID", "Order Id", "orderId", "Id"]),
-    commission: findColumn(headers, ["Commission", "Fee"]),
+    id: findColumn(headers, [
+      "Order ID",
+      "Order Id",
+      "orderId",
+      "Id",
+      "Level ID",
+      "Level Id",
+    ]),
   };
 
   if (!col.symbol || !col.side) {
@@ -261,7 +544,6 @@ function parseOrderHistory(
     };
   }
 
-  // If P&L column exists on rows, treat like balance
   if (col.pnl && rows.some((r) => r[col.pnl!]?.trim())) {
     return parseBalanceOrJournalRows(headers, rows, errors);
   }
@@ -275,15 +557,13 @@ function parseOrderHistory(
     id: string | null;
   }> = [];
 
-  rows.forEach((row, index) => {
+  rows.forEach((row) => {
     if (col.status) {
-      const status = row[col.status]?.toLowerCase() ?? "";
+      const status = row[col.status]?.toLowerCase().trim() ?? "";
       if (
         status &&
-        !status.includes("fill") &&
-        status !== "filled" &&
-        status !== "complete" &&
-        status !== "executed"
+        !FILLED_STATUSES.has(status) &&
+        !status.includes("fill")
       ) {
         return;
       }
@@ -309,10 +589,7 @@ function parseOrderHistory(
     (a, b) => new Date(a.time).getTime() - new Date(b.time).getTime()
   );
 
-  const openBySymbol = new Map<
-    string,
-    Array<(typeof filled)[0]>
-  >();
+  const openBySymbol = new Map<string, Array<(typeof filled)[0]>>();
   const result: NormalizedTradeRow[] = [];
   let skipped = 0;
 
@@ -361,26 +638,42 @@ function parseOrderHistory(
 
   if (result.length === 0) {
     errors.push(
-      "Could not pair Order History into trades. Try exporting Balance History instead (pre-matched P&L)."
+      "Could not pair Order History into trades. Export Balance History instead (each row includes P&L)."
     );
   }
 
   return { rows: result, errors, skipped };
 }
 
-function detectMode(headers: string[]): TradingViewMode {
+function detectMode(headers: string[], rows: Record<string, string>[]): TradingViewMode {
+  const classified = classifyTradingViewExport(headers, rows);
+
+  switch (classified.kind) {
+    case "balance_ledger":
+    case "balance_history":
+      return "balance";
+    case "trading_journal":
+      return "journal";
+    case "order_history":
+      return "orders";
+    case "positions":
+    case "working_orders":
+    case "activity_log":
+      return "auto";
+    default:
+      break;
+  }
+
   if (
     findColumn(headers, ["Trade #", "Trade#"]) &&
-    findColumn(headers, ["Type"]) &&
-    findColumn(headers, ["Net P&L", "P&L", "PnL"])
+    findColumn(headers, ["Type"])
   ) {
-    return "list_of_trades";
+    return "journal";
   }
 
   if (
     findColumn(headers, ["P&L", "PnL", "Net P&L", "Profit"]) &&
-    (findColumn(headers, ["Closing Time", "Exit Time", "Close Time"]) ||
-      findColumn(headers, ["Symbol"]))
+    findColumn(headers, ["Symbol"])
   ) {
     return "balance";
   }
@@ -400,14 +693,52 @@ export function parseTradingViewCsv(
   mode: TradingViewMode = "auto"
 ): ImportAdapterResult {
   const { headers, rows, errors } = parseCsvRows(csvText);
-  const effective = mode === "auto" ? detectMode(headers) : mode;
+  const classified = classifyTradingViewExport(headers, rows);
+
+  if (
+    mode === "auto" &&
+    (classified.kind === "positions" ||
+      classified.kind === "working_orders" ||
+      classified.kind === "activity_log")
+  ) {
+    return unsupportedResult(classified.message!, errors, rows.length);
+  }
+
+  if (mode === "balance" && classified.kind === "working_orders") {
+    return unsupportedResult(
+      "Balance History preset selected but file looks like working Orders. Export the Balance History tab.",
+      errors,
+      rows.length
+    );
+  }
+
+  if (mode === "orders" && classified.kind === "positions") {
+    return unsupportedResult(
+      "Order History preset selected but file looks like open Positions.",
+      errors,
+      rows.length
+    );
+  }
+
+  const effective = mode === "auto" ? detectMode(headers, rows) : mode;
+
+  if (
+    effective === "balance" &&
+    classified.kind === "balance_ledger"
+  ) {
+    return parseBalanceLedgerRows(headers, rows, errors);
+  }
 
   switch (effective) {
+    case "journal":
     case "list_of_trades":
       return parseListOfTrades(headers, rows, errors);
     case "orders":
       return parseOrderHistory(headers, rows, errors);
     default:
+      if (classified.kind === "balance_ledger") {
+        return parseBalanceLedgerRows(headers, rows, errors);
+      }
       return parseBalanceOrJournalRows(headers, rows, errors);
   }
 }
@@ -418,18 +749,25 @@ export const tradingviewImportAdapter: ImportAdapter = {
   supportedFields: [
     "Symbol",
     "Side",
+    "Type",
     "Qty",
+    "Quantity",
     "Price",
     "Fill Price",
+    "Fill price",
     "P&L",
     "Net P&L",
+    "Realized PnL (value)",
     "Commission",
     "Order ID",
     "Closing Time",
+    "Closing time",
     "Time",
+    "Action",
     "Status",
     "Trade #",
-    "Type",
+    "Date and time",
+    "Date/Time",
   ],
   parse(input, options) {
     const text = typeof input === "string" ? input : "";

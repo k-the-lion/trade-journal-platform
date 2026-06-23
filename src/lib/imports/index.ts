@@ -18,14 +18,18 @@ export {
 } from "./csv-adapter";
 export { parseTopstepXTrades, topstepxImportAdapter } from "./topstepx-adapter";
 export { parseTradovateCsv, tradovateImportAdapter } from "./tradovate-adapter";
-export { parseTradingViewCsv, tradingviewImportAdapter } from "./tradingview-adapter";
+export {
+  classifyTradingViewExport,
+  parseTradingViewCsv,
+  tradingviewImportAdapter,
+} from "./tradingview-adapter";
 export {
   detectImportFormat,
   presetToAdapterKey,
   type DetectedFormat,
   type ImportPreset,
 } from "./detect-format";
-export { parseCsvRows } from "./csv-utils";
+export { parseCsvRows, findPnlColumn } from "./csv-utils";
 export {
   type ImportAdapter,
   type NormalizedTradeRow,
