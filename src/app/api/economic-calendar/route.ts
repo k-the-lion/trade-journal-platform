@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { hasCalendarApiKey, CALENDAR_KEY_SETUP_HINT } from "@/lib/economic-calendar/api-keys";
 import { fetchEconomicCalendar } from "@/lib/economic-calendar/provider";
 
 export const dynamic = "force-dynamic";
@@ -18,18 +17,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    if (!hasCalendarApiKey()) {
-      return NextResponse.json(
-        {
-          error: `No calendar API key configured. ${CALENDAR_KEY_SETUP_HINT}`,
-        },
-        { status: 503 }
-      );
-    }
-
-    const events = await fetchEconomicCalendar(from, to);
+    const { events, coverageNote } = await fetchEconomicCalendar(from, to);
     return NextResponse.json(
-      { events },
+      { events, coverageNote },
       {
         headers: {
           "Cache-Control": "private, max-age=300",
@@ -39,10 +29,6 @@ export async function GET(request: Request) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to load economic calendar";
-    const status =
-      message.includes("not configured") || message.includes("FMP_API_KEY")
-        ? 503
-        : 502;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

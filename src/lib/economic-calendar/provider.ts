@@ -1,31 +1,58 @@
-import { getFmpApiKey, getFinnhubApiKey, CALENDAR_KEY_SETUP_HINT } from "./api-keys";
+import {
+  FAIR_ECONOMY_COVERAGE_NOTE,
+  fetchFairEconomyCalendar,
+} from "./fair-economy";
 import { fetchFmpCalendar } from "./fmp";
 import { fetchFinnhubCalendar } from "./finnhub";
+import { getFmpApiKey, getFinnhubApiKey } from "./api-keys";
 import type { EconomicEvent } from "./types";
 
-export async function fetchEconomicCalendar(
+export interface CalendarFetchResult {
+  events: EconomicEvent[];
+  coverageNote: string | null;
+}
+
+async function tryPaidProviders(
   from: string,
   to: string
-): Promise<EconomicEvent[]> {
+): Promise<EconomicEvent[] | null> {
   const fmpKey = getFmpApiKey();
   if (fmpKey) {
-    return fetchFmpCalendar(from, to, fmpKey);
+    try {
+      const events = await fetchFmpCalendar(from, to, fmpKey);
+      if (events.length > 0) return events;
+    } catch {
+      // Ignore restricted/invalid paid keys.
+    }
   }
 
   const finnhubKey = getFinnhubApiKey();
   if (finnhubKey) {
     try {
-      return await fetchFinnhubCalendar(from, to);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      if (message.includes("403")) {
-        throw new Error(
-          "Finnhub economic calendar requires a paid plan (403). Use a free FMP_API_KEY from financialmodelingprep.com instead."
-        );
-      }
-      throw err;
+      const events = await fetchFinnhubCalendar(from, to);
+      if (events.length > 0) return events;
+    } catch {
+      // Ignore Finnhub free-tier 403.
     }
   }
 
-  throw new Error(`No calendar API key configured. ${CALENDAR_KEY_SETUP_HINT}`);
+  return null;
+}
+
+export async function fetchEconomicCalendar(
+  from: string,
+  to: string
+): Promise<CalendarFetchResult> {
+  try {
+    const events = await fetchFairEconomyCalendar(from, to);
+    return { events, coverageNote: FAIR_ECONOMY_COVERAGE_NOTE };
+  } catch {
+    const paid = await tryPaidProviders(from, to);
+    if (paid) {
+      return { events: paid, coverageNote: null };
+    }
+    throw new Error(
+      "Could not load the economic calendar. The free feed is temporarily unavailable — try again shortly."
+    );
+  }
 }

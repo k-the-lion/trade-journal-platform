@@ -1,4 +1,5 @@
 import { categorizeEvent } from "./categories";
+import { readJsonBody } from "./parse-response";
 import type { EconomicEvent, EventImpact } from "./types";
 import { formatTimeEt, toDateKey } from "./utils";
 
@@ -74,7 +75,7 @@ export function normalizeFmpEvents(rows: FmpRow[]): EconomicEvent[] {
 
 async function fetchFmpUrl(url: string): Promise<FmpRow[]> {
   const res = await fetch(url, { next: { revalidate: 900 } });
-  const data: unknown = await res.json();
+  const data: unknown = await readJsonBody(res);
 
   if (!res.ok) {
     const detail =

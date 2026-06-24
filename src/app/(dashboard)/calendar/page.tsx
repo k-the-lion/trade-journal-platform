@@ -6,8 +6,8 @@ export default function CalendarPage() {
       <div>
         <h1 className="text-2xl font-semibold">Economic Calendar</h1>
         <p className="text-muted text-sm mt-1">
-          CPI, NFP, FOMC, and other market-moving releases. Red-folder (high impact) events
-          are highlighted by default — times shown in US Eastern (ET).
+          CPI, NFP, FOMC, and other market-moving releases from the current trading week.
+          Red-folder (high impact) events are highlighted by default — times shown in US Eastern (ET).
         </p>
       </div>
 

@@ -7,6 +7,15 @@ export function toDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+export function toDateKeyEt(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: ET,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
 export function isSameDay(a: Date, b: Date): boolean {
   return toDateKey(a) === toDateKey(b);
 }

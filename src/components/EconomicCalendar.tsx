@@ -118,6 +118,7 @@ export function EconomicCalendar() {
   const [events, setEvents] = useState<EconomicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [coverageNote, setCoverageNote] = useState<string | null>(null);
   const [impacts, setImpacts] = useState<EventImpact[]>(["high"]);
   const [countries, setCountries] = useState<string[]>(["US"]);
 
@@ -144,14 +145,24 @@ export function EconomicCalendar() {
       const res = await fetch(
         `/api/economic-calendar?from=${from}&to=${to}`
       );
-      const data = (await res.json()) as {
+      const raw = await res.text();
+      let data: {
         events?: EconomicEvent[];
         error?: string;
+        coverageNote?: string | null;
       };
+      try {
+        data = JSON.parse(raw) as typeof data;
+      } catch {
+        throw new Error(
+          raw.trim().slice(0, 160) || "Failed to load calendar"
+        );
+      }
       if (!res.ok) {
         throw new Error(data.error ?? "Failed to load calendar");
       }
       setEvents(data.events ?? []);
+      setCoverageNote(data.coverageNote ?? null);
     } catch (err) {
       setEvents([]);
       setError(err instanceof Error ? err.message : "Failed to load calendar");
@@ -371,6 +382,12 @@ export function EconomicCalendar() {
         {error && (
           <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
             {error}
+          </div>
+        )}
+
+        {coverageNote && !error && (
+          <div className="rounded-lg border border-border bg-white/5 p-3 text-sm text-muted">
+            {coverageNote}
           </div>
         )}
 

@@ -1,7 +1,4 @@
-export const CALENDAR_KEY_SETUP_HINT =
-  "Add FMP_API_KEY in Vercel → Settings → Environment Variables (Production). Get a free key at financialmodelingprep.com, then redeploy.";
-
-/** FMP free tier includes the economic calendar (Finnhub returns 403 on free plans). */
+/** Optional paid calendar keys — the app uses a free Forex Factory feed by default. */
 export function getFmpApiKey(): string | undefined {
   const candidates = [
     process.env.FMP_API_KEY,
@@ -15,7 +12,6 @@ export function getFmpApiKey(): string | undefined {
   return undefined;
 }
 
-/** Optional paid fallback — not available on Finnhub free tier. */
 export function getFinnhubApiKey(): string | undefined {
   const candidates = [
     process.env.FINNHUB_API_KEY,
@@ -27,8 +23,4 @@ export function getFinnhubApiKey(): string | undefined {
     if (trimmed) return trimmed;
   }
   return undefined;
-}
-
-export function hasCalendarApiKey(): boolean {
-  return Boolean(getFmpApiKey() || getFinnhubApiKey());
 }
