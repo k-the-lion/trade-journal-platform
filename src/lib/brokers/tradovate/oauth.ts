@@ -2,7 +2,7 @@ import type { TradovateEnvironment } from "./types";
 import { TradovateApiError } from "./client";
 import {
   getTradovateOAuthRedirectUri,
-  getTradovateOAuthTokenUrl,
+  getTradovateOAuthTokenUrls,
 } from "./oauth-config";
 
 export type TradovateOAuthTokenResponse = {
@@ -33,20 +33,10 @@ function getOAuthClientCredentials() {
   return { clientId, clientSecret };
 }
 
-async function postOAuthToken(
-  environment: TradovateEnvironment,
-  body: Record<string, string>
+async function parseOAuthTokenResponse(
+  res: Response,
+  text: string
 ): Promise<TradovateOAuthTokenResponse> {
-  const res = await fetch(getTradovateOAuthTokenUrl(environment), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  const text = await res.text();
   let data: TradovateOAuthTokenResponse;
   try {
     data = JSON.parse(text) as TradovateOAuthTokenResponse;
@@ -65,6 +55,45 @@ async function postOAuthToken(
   }
 
   return data;
+}
+
+async function postOAuthToken(
+  environment: TradovateEnvironment,
+  body: Record<string, string>
+): Promise<TradovateOAuthTokenResponse> {
+  const urls = getTradovateOAuthTokenUrls(environment);
+  let lastError: Error | null = null;
+
+  for (const url of urls) {
+    for (const mode of ["form", "json"] as const) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers:
+            mode === "form"
+              ? {
+                  "Content-Type": "application/x-www-form-urlencoded",
+                  Accept: "application/json",
+                }
+              : {
+                  "Content-Type": "application/json",
+                  Accept: "application/json",
+                },
+          body:
+            mode === "form"
+              ? new URLSearchParams(body).toString()
+              : JSON.stringify(body),
+        });
+
+        const text = await res.text();
+        return await parseOAuthTokenResponse(res, text);
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+      }
+    }
+  }
+
+  throw lastError ?? new TradovateApiError("OAuth token exchange failed");
 }
 
 export async function tradovateExchangeOAuthCode(

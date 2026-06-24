@@ -1,7 +1,10 @@
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { ImportTabs } from "@/components/ImportTabs";
 import { listImportAdapters } from "@/lib/imports";
-import { isTradovateOAuthConfigured } from "@/lib/brokers/tradovate/oauth-config";
+import {
+  getTradovateOAuthRedirectUri,
+  isTradovateOAuthConfigured,
+} from "@/lib/brokers/tradovate/oauth-config";
 import type { BrokerSyncConnectionPublic } from "@/lib/types/database";
 
 async function getOrgOptions(userId: string) {
@@ -65,6 +68,7 @@ export default async function ImportPage() {
   }));
 
   const tradovateOAuthConfigured = isTradovateOAuthConfigured();
+  const tradovateOAuthRedirectUri = getTradovateOAuthRedirectUri();
 
   return (
     <div className="space-y-8">
@@ -82,6 +86,7 @@ export default async function ImportPage() {
         topstepxConnections={topstepxConnections}
         tradovateConnections={tradovateConnections}
         tradovateOAuthConfigured={tradovateOAuthConfigured}
+        tradovateOAuthRedirectUri={tradovateOAuthRedirectUri}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-5xl">
@@ -107,9 +112,9 @@ export default async function ImportPage() {
           <h2 className="font-medium text-sm">Tradovate</h2>
           <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
             <li>Click <strong className="text-foreground">Connect with Tradovate</strong></li>
-            <li>Log in and approve access in the popup</li>
-            <li>Pick your Tradovate account and journal account</li>
-            <li>Use <strong className="text-foreground">Sync now</strong> to import Position History</li>
+            <li>Log in on Tradovate&apos;s site and approve read-only access</li>
+            <li>No API subscription needed on your account</li>
+            <li>Pick accounts, then <strong className="text-foreground">Sync now</strong></li>
           </ol>
         </div>
       </div>

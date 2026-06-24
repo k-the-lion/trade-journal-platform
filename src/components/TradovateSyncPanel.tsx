@@ -17,17 +17,16 @@ import type { BrokerSyncConnectionPublic } from "@/lib/types/database";
 
 type AccountOption = { id: string; name: string; is_default?: boolean };
 
-const TRADOVATE_SUPPORT_URL =
-  "https://support.ninjatrader.com/s/article/Tradovate-API-Access?language=en_US";
-
 export function TradovateSyncPanel({
   oauthConfigured,
+  oauthRedirectUri,
   connections: initialConnections,
   accountOptions: initialAccountOptions,
   strategyOptions = [],
   orgOptions = [],
 }: {
   oauthConfigured: boolean;
+  oauthRedirectUri: string;
   connections: BrokerSyncConnectionPublic[];
   accountOptions: AccountOption[];
   strategyOptions?: { id: string; name: string }[];
@@ -288,17 +287,38 @@ export function TradovateSyncPanel({
         <div>
           <h2 className="font-medium">Connect Tradovate</h2>
           <p className="text-xs text-muted mt-1">
-            Sign in with your Tradovate account — same flow as TradingView or other connected apps.
-            Works with Apex, Tradeify, TPT, and other Tradovate-based firms when your account allows
-            third-party access.
+            Same flow as TradesViz, Kinfo, and other journals: you log in on Tradovate&apos;s site and
+            approve read-only access. You do <strong className="text-foreground">not</strong> need an
+            API subscription or API tab in your Tradovate settings — that is only for app developers.
           </p>
         </div>
 
         {!oauthConfigured && (
-          <div className="text-sm rounded-md p-3 border border-amber-500/30 bg-amber-500/10 text-amber-100">
-            OAuth is not configured on this site yet (admin must register the app with Tradovate).
-            Until then, use the <strong className="text-foreground">CSV upload</strong> tab → Tradovate
-            Position History export.
+          <div className="text-sm rounded-md p-3 border border-amber-500/30 bg-amber-500/10 text-amber-100 space-y-2">
+            <p>
+              Tradovate login is not enabled on this deployment yet. The journal operator must register
+              one OAuth app with Tradovate (one-time setup), then add{" "}
+              <code className="text-xs">TRADOVATE_CLIENT_ID</code> and{" "}
+              <code className="text-xs">TRADOVATE_CLIENT_SECRET</code> in Vercel.
+            </p>
+            <p className="text-xs text-amber-200/80">
+              Redirect URI for Tradovate registration:{" "}
+              <span className="text-foreground break-all">{oauthRedirectUri}</span>
+            </p>
+            <p className="text-xs">
+              Contact{" "}
+              <a
+                href="mailto:apisupport@ninjatrader.com"
+                className="text-primary hover:underline"
+              >
+                apisupport@ninjatrader.com
+              </a>{" "}
+              to register a third-party OAuth app for this journal.
+            </p>
+            <p className="text-xs">
+              Until then: use <strong className="text-foreground">CSV upload</strong> → Tradovate
+              Position History.
+            </p>
           </div>
         )}
 
@@ -498,18 +518,6 @@ export function TradovateSyncPanel({
           </div>
         )}
 
-        <p className="text-xs text-muted">
-          App developers: register OAuth in Tradovate → Application Settings → API Access. See{" "}
-          <a
-            href={TRADOVATE_SUPPORT_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline"
-          >
-            NinjaTrader&apos;s Tradovate API guide
-          </a>
-          .
-        </p>
       </div>
 
       {connections.length > 0 && (

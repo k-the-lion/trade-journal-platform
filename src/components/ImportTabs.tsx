@@ -15,6 +15,7 @@ export function ImportTabs({
   topstepxConnections,
   tradovateConnections,
   tradovateOAuthConfigured,
+  tradovateOAuthRedirectUri,
 }: {
   orgOptions: { id: string; name: string }[];
   accountOptions: { id: string; name: string; is_default?: boolean }[];
@@ -22,6 +23,7 @@ export function ImportTabs({
   topstepxConnections: BrokerSyncConnectionPublic[];
   tradovateConnections: BrokerSyncConnectionPublic[];
   tradovateOAuthConfigured: boolean;
+  tradovateOAuthRedirectUri: string;
 }) {
   const [tab, setTab] = useState<Tab>("topstepx");
 
@@ -60,6 +62,7 @@ export function ImportTabs({
       ) : tab === "tradovate" ? (
         <TradovateSyncPanel
           oauthConfigured={tradovateOAuthConfigured}
+          oauthRedirectUri={tradovateOAuthRedirectUri}
           connections={tradovateConnections}
           accountOptions={accountOptions}
           strategyOptions={strategyOptions}

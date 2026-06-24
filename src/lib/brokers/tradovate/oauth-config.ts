@@ -36,10 +36,9 @@ export function getTradovateOAuthAuthorizeUrl(
   return `${authBase}?${params.toString()}`;
 }
 
-export function getTradovateOAuthTokenUrl(environment: TradovateEnvironment): string {
-  const base =
-    environment === "live"
-      ? "https://live.tradovateapi.com/v1"
-      : "https://demo.tradovateapi.com/v1";
-  return `${base}/auth/oauthtoken`;
+/** Official OAuth example uses /auth/oauthtoken without /v1. */
+export function getTradovateOAuthTokenUrls(environment: TradovateEnvironment): string[] {
+  const host =
+    environment === "live" ? "https://live.tradovateapi.com" : "https://demo.tradovateapi.com";
+  return [`${host}/auth/oauthtoken`, `${host}/v1/auth/oauthtoken`];
 }
