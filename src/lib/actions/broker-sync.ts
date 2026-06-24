@@ -12,9 +12,23 @@ import {
   markTopstepXSyncError,
   runTopstepXSyncForConnection,
 } from "@/lib/brokers/run-topstepx-sync";
+import {
+  markTradovateSyncError,
+  runTradovateSyncForConnection,
+} from "@/lib/brokers/run-tradovate-sync";
+import {
+  tradovateLoginAndListAccounts,
+  TradovateApiError,
+} from "@/lib/brokers/tradovate/client";
+import type { TradovateCredentials, TradovateEnvironment } from "@/lib/brokers/tradovate/types";
 import type { BrokerSyncConnection, BrokerSyncConnectionPublic } from "@/lib/types/database";
 
 export type TopstepXAccountOption = {
+  id: number;
+  name: string;
+};
+
+export type TradovateAccountOption = {
   id: number;
   name: string;
 };
@@ -150,6 +164,162 @@ export async function disconnectBrokerSync(connectionId: string) {
 
   if (error) throw new Error(error.message);
   revalidatePath("/import");
+}
+
+export async function verifyTradovateCredentials(input: {
+  username: string;
+  password: string;
+  cid: string;
+  sec: string;
+  appId?: string;
+  environment?: TradovateEnvironment;
+}): Promise<{ accounts: TradovateAccountOption[] }> {
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const creds = buildTradovateCredentials(input);
+
+  try {
+    const { accounts } = await tradovateLoginAndListAccounts(input.username.trim(), creds);
+    return {
+      accounts: accounts.map((a) => ({ id: a.id, name: a.name })),
+    };
+  } catch (err) {
+    if (err instanceof TradovateApiError) {
+      throw new Error(err.message);
+    }
+    throw err;
+  }
+}
+
+function buildTradovateCredentials(input: {
+  password: string;
+  cid: string;
+  sec: string;
+  appId?: string;
+  environment?: TradovateEnvironment;
+}): TradovateCredentials {
+  const trimmedPassword = input.password.trim();
+  const trimmedCid = input.cid.trim();
+  const trimmedSec = input.sec.trim();
+  if (!trimmedPassword || !trimmedCid || !trimmedSec) {
+    throw new Error("Password, API Client ID, and API Secret are required");
+  }
+  return {
+    password: trimmedPassword,
+    cid: trimmedCid,
+    sec: trimmedSec,
+    appId: input.appId?.trim() || "TradeJournal",
+    environment: input.environment ?? "live",
+  };
+}
+
+export async function connectTradovate(input: {
+  username: string;
+  password: string;
+  cid: string;
+  sec: string;
+  appId?: string;
+  environment?: TradovateEnvironment;
+  externalAccountId: number;
+  externalAccountName: string;
+  tradingAccountId: string;
+  strategyId?: string | null;
+  syncFrom?: string | null;
+  orgId?: string | null;
+  syncMode?: BrokerSyncMode;
+}) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const trimmedUser = input.username.trim();
+  if (!trimmedUser) throw new Error("Username is required");
+  if (!input.tradingAccountId) {
+    throw new Error("Select a journal account for imported trades");
+  }
+
+  const creds = buildTradovateCredentials(input);
+  await verifyTradovateCredentials({ username: trimmedUser, ...creds });
+
+  const credentials_encrypted = encryptJson({
+    password: creds.password,
+    cid: creds.cid,
+    sec: creds.sec,
+    appId: creds.appId,
+    environment: creds.environment,
+  });
+  const externalId = String(input.externalAccountId);
+  const autoSync = input.syncMode === "auto";
+
+  const { data, error } = await supabase
+    .from("broker_sync_connections")
+    .upsert(
+      {
+        user_id: profile.id,
+        provider: "tradovate",
+        label: input.externalAccountName,
+        username: trimmedUser,
+        credentials_encrypted,
+        external_account_id: externalId,
+        external_account_name: input.externalAccountName,
+        trading_account_id: input.tradingAccountId,
+        strategy_id: input.strategyId ?? null,
+        org_id: input.orgId ?? null,
+        sync_from: input.syncFrom ? new Date(input.syncFrom).toISOString() : null,
+        auto_sync: autoSync,
+        last_sync_status: "never",
+        last_sync_error: null,
+        last_sync_imported: 0,
+        is_active: true,
+      },
+      { onConflict: "user_id,provider,external_account_id" }
+    )
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/import");
+  const { credentials_encrypted: _removed, ...publicConnection } = data as BrokerSyncConnection;
+  return publicConnection;
+}
+
+export async function syncTradovateConnection(connectionId: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { data: connection, error: connError } = await supabase
+    .from("broker_sync_connections")
+    .select("*")
+    .eq("id", connectionId)
+    .eq("user_id", profile.id)
+    .eq("provider", "tradovate")
+    .single();
+
+  if (connError || !connection) {
+    throw new Error("Tradovate connection not found");
+  }
+
+  try {
+    const result = await runTradovateSyncForConnection(
+      supabase,
+      connection as BrokerSyncConnection
+    );
+
+    revalidatePath("/import");
+    revalidatePath("/trades");
+    revalidatePath("/dashboard");
+    revalidatePath("/reports");
+
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Sync failed";
+    await markTradovateSyncError(supabase, connectionId, message);
+    revalidatePath("/import");
+    throw new Error(message);
+  }
 }
 
 export async function syncTopstepXConnection(connectionId: string) {

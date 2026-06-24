@@ -4,6 +4,10 @@ import {
   markTopstepXSyncError,
   runTopstepXSyncForConnection,
 } from "@/lib/brokers/run-topstepx-sync";
+import {
+  markTradovateSyncError,
+  runTradovateSyncForConnection,
+} from "@/lib/brokers/run-tradovate-sync";
 import type { BrokerSyncConnection } from "@/lib/types/database";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +19,35 @@ function authorizeCron(request: Request): boolean {
   if (!secret) return false;
   const auth = request.headers.get("authorization");
   return auth === `Bearer ${secret}`;
+}
+
+async function syncConnection(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  connection: BrokerSyncConnection
+): Promise<{ connectionId: string; imported: number; error?: string }> {
+  try {
+    const result =
+      connection.provider === "tradovate"
+        ? await runTradovateSyncForConnection(supabase, connection)
+        : await runTopstepXSyncForConnection(supabase, connection);
+
+    return {
+      connectionId: connection.id,
+      imported: result.imported,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Sync failed";
+    if (connection.provider === "tradovate") {
+      await markTradovateSyncError(supabase, connection.id, message);
+    } else {
+      await markTopstepXSyncError(supabase, connection.id, message);
+    }
+    return {
+      connectionId: connection.id,
+      imported: 0,
+      error: message,
+    };
+  }
 }
 
 export async function GET(request: Request) {
@@ -33,7 +66,7 @@ export async function GET(request: Request) {
   const { data: connections, error } = await supabase
     .from("broker_sync_connections")
     .select("*")
-    .eq("provider", "topstepx")
+    .in("provider", ["topstepx", "tradovate"])
     .eq("is_active", true)
     .eq("auto_sync", true);
 
@@ -42,28 +75,10 @@ export async function GET(request: Request) {
   }
 
   const list = (connections ?? []) as BrokerSyncConnection[];
-  const results: Array<{
-    connectionId: string;
-    imported: number;
-    error?: string;
-  }> = [];
+  const results = [];
 
   for (const connection of list) {
-    try {
-      const result = await runTopstepXSyncForConnection(supabase, connection);
-      results.push({
-        connectionId: connection.id,
-        imported: result.imported,
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Sync failed";
-      await markTopstepXSyncError(supabase, connection.id, message);
-      results.push({
-        connectionId: connection.id,
-        imported: 0,
-        error: message,
-      });
-    }
+    results.push(await syncConnection(supabase, connection));
   }
 
   return NextResponse.json({

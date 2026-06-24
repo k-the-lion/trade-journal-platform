@@ -50,9 +50,12 @@ export default async function ImportPage() {
           "id, user_id, provider, label, username, external_account_id, external_account_name, trading_account_id, strategy_id, org_id, sync_from, auto_sync, last_synced_at, last_sync_status, last_sync_error, last_sync_imported, is_active, created_at, updated_at"
         )
         .eq("user_id", profile!.id)
-        .eq("provider", "topstepx")
         .order("created_at", { ascending: false }),
     ]);
+
+  const allConnections = (connections ?? []) as BrokerSyncConnectionPublic[];
+  const topstepxConnections = allConnections.filter((c) => c.provider === "topstepx");
+  const tradovateConnections = allConnections.filter((c) => c.provider === "tradovate");
 
   const accountOptions = (accounts ?? []).map((a) => ({
     id: a.id,
@@ -65,7 +68,7 @@ export default async function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold">Import Trades</h1>
         <p className="text-muted text-sm mt-1">
-          Sync from TopstepX automatically or upload a CSV from any supported broker.
+          Sync from TopstepX or Tradovate automatically, or upload a CSV from any supported broker.
         </p>
       </div>
 
@@ -73,7 +76,8 @@ export default async function ImportPage() {
         orgOptions={orgOptions}
         accountOptions={accountOptions}
         strategyOptions={(strategies ?? []).map((s) => ({ id: s.id, name: s.name }))}
-        connections={(connections ?? []) as BrokerSyncConnectionPublic[]}
+        topstepxConnections={topstepxConnections}
+        tradovateConnections={tradovateConnections}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-5xl">
@@ -96,10 +100,13 @@ export default async function ImportPage() {
           </ol>
         </div>
         <div className="card p-5 space-y-2">
-          <h2 className="font-medium text-sm">Tradovate</h2>
-          <p className="text-xs text-muted">
-            API sync coming soon. For now: Accounts → gear → <strong className="text-foreground">Position History</strong> → export CSV.
-          </p>
+          <h2 className="font-medium text-sm">Tradovate API</h2>
+          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
+            <li>Subscribe to API Access in Tradovate Application Settings</li>
+            <li>Generate an API key — copy Client ID (cid) and Secret</li>
+            <li>Connect above — syncs Position History with duplicate detection</li>
+            <li>Use <strong className="text-foreground">Demo</strong> for sim/eval, <strong className="text-foreground">Live</strong> for funded accounts</li>
+          </ol>
         </div>
       </div>
 

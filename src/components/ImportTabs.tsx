@@ -3,54 +3,61 @@
 import { useState } from "react";
 import { CsvImportForm } from "@/components/CsvImportForm";
 import { TopstepXSyncPanel } from "@/components/TopstepXSyncPanel";
+import { TradovateSyncPanel } from "@/components/TradovateSyncPanel";
 import type { BrokerSyncConnectionPublic } from "@/lib/types/database";
 
-type Tab = "csv" | "topstepx";
+type Tab = "topstepx" | "tradovate" | "csv";
 
 export function ImportTabs({
   orgOptions,
   accountOptions,
   strategyOptions,
-  connections,
+  topstepxConnections,
+  tradovateConnections,
 }: {
   orgOptions: { id: string; name: string }[];
   accountOptions: { id: string; name: string; is_default?: boolean }[];
   strategyOptions: { id: string; name: string }[];
-  connections: BrokerSyncConnectionPublic[];
+  topstepxConnections: BrokerSyncConnectionPublic[];
+  tradovateConnections: BrokerSyncConnectionPublic[];
 }) {
   const [tab, setTab] = useState<Tab>("topstepx");
+
+  const tabs: Array<{ id: Tab; label: string }> = [
+    { id: "topstepx", label: "TopstepX API" },
+    { id: "tradovate", label: "Tradovate API" },
+    { id: "csv", label: "CSV upload" },
+  ];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setTab("topstepx")}
-          className={`text-sm px-4 py-2 rounded-full border transition-colors ${
-            tab === "topstepx"
-              ? "border-primary bg-primary/15 text-primary"
-              : "border-border text-muted hover:border-primary/40"
-          }`}
-        >
-          TopstepX API sync
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("csv")}
-          className={`text-sm px-4 py-2 rounded-full border transition-colors ${
-            tab === "csv"
-              ? "border-primary bg-primary/15 text-primary"
-              : "border-border text-muted hover:border-primary/40"
-          }`}
-        >
-          CSV upload
-        </button>
-        <span className="text-xs text-muted self-center">Tradovate API — coming soon</span>
+        {tabs.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`text-sm px-4 py-2 rounded-full border transition-colors ${
+              tab === id
+                ? "border-primary bg-primary/15 text-primary"
+                : "border-border text-muted hover:border-primary/40"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {tab === "topstepx" ? (
         <TopstepXSyncPanel
-          connections={connections}
+          connections={topstepxConnections}
+          accountOptions={accountOptions}
+          strategyOptions={strategyOptions}
+          orgOptions={orgOptions}
+        />
+      ) : tab === "tradovate" ? (
+        <TradovateSyncPanel
+          connections={tradovateConnections}
           accountOptions={accountOptions}
           strategyOptions={strategyOptions}
           orgOptions={orgOptions}
