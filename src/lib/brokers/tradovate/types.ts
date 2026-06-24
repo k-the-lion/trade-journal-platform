@@ -1,12 +1,24 @@
 export type TradovateEnvironment = "live" | "demo";
 
-export type TradovateCredentials = {
+/** Legacy API-key auth (developer / fallback). */
+export type TradovateApiKeyCredentials = {
+  authType?: "api_key";
   password: string;
   cid: string;
   sec: string;
   appId: string;
   environment: TradovateEnvironment;
 };
+
+/** Standard user OAuth connection. */
+export type TradovateOAuthCredentials = {
+  authType: "oauth";
+  refreshToken: string;
+  accessToken?: string;
+  environment: TradovateEnvironment;
+};
+
+export type TradovateCredentials = TradovateApiKeyCredentials | TradovateOAuthCredentials;
 
 export type TradovateAccessTokenResponse = {
   accessToken?: string;

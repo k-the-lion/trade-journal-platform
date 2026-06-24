@@ -1,6 +1,7 @@
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { ImportTabs } from "@/components/ImportTabs";
 import { listImportAdapters } from "@/lib/imports";
+import { isTradovateOAuthConfigured } from "@/lib/brokers/tradovate/oauth-config";
 import type { BrokerSyncConnectionPublic } from "@/lib/types/database";
 
 async function getOrgOptions(userId: string) {
@@ -63,6 +64,8 @@ export default async function ImportPage() {
     is_default: a.is_default,
   }));
 
+  const tradovateOAuthConfigured = isTradovateOAuthConfigured();
+
   return (
     <div className="space-y-8">
       <div>
@@ -78,6 +81,7 @@ export default async function ImportPage() {
         strategyOptions={(strategies ?? []).map((s) => ({ id: s.id, name: s.name }))}
         topstepxConnections={topstepxConnections}
         tradovateConnections={tradovateConnections}
+        tradovateOAuthConfigured={tradovateOAuthConfigured}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-5xl">
@@ -100,12 +104,12 @@ export default async function ImportPage() {
           </ol>
         </div>
         <div className="card p-5 space-y-2">
-          <h2 className="font-medium text-sm">Tradovate API</h2>
+          <h2 className="font-medium text-sm">Tradovate</h2>
           <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
-            <li>Subscribe to API Access in Tradovate Application Settings</li>
-            <li>Generate an API key — copy Client ID (cid) and Secret</li>
-            <li>Connect above — syncs Position History with duplicate detection</li>
-            <li>Use <strong className="text-foreground">Demo</strong> for sim/eval, <strong className="text-foreground">Live</strong> for funded accounts</li>
+            <li>Click <strong className="text-foreground">Connect with Tradovate</strong></li>
+            <li>Log in and approve access in the popup</li>
+            <li>Pick your Tradovate account and journal account</li>
+            <li>Use <strong className="text-foreground">Sync now</strong> to import Position History</li>
           </ol>
         </div>
       </div>

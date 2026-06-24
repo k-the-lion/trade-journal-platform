@@ -1,5 +1,5 @@
-import { tradovateAccessToken, tradovateFetchPositionHistoryCsv } from "./client";
-import type { TradovateCredentials } from "./types";
+import type { TradovateCredentials, TradovateOAuthCredentials } from "./types";
+import { resolveTradovateAccessToken, tradovateFetchPositionHistoryCsv } from "./client";
 import { parseTradovateCsv } from "@/lib/imports/tradovate-adapter";
 import type { NormalizedTradeRow } from "@/lib/imports/adapter";
 
@@ -45,8 +45,8 @@ export async function fetchTradovateTrades(
   accountId: number,
   syncFrom?: string | null,
   lastSyncedAt?: string | null
-): Promise<NormalizedTradeRow[]> {
-  const token = await tradovateAccessToken(username, creds);
+): Promise<{ rows: NormalizedTradeRow[]; updatedCreds?: TradovateOAuthCredentials }> {
+  const { token, updatedCreds } = await resolveTradovateAccessToken(username, creds);
 
   const end = new Date();
   let start: Date;
@@ -79,5 +79,5 @@ export async function fetchTradovateTrades(
     throw new Error(errors[0] ?? "No trades found in Tradovate Position History report");
   }
 
-  return dedupeRows(allRows);
+  return { rows: dedupeRows(allRows), updatedCreds };
 }

@@ -1,11 +1,14 @@
 import type {
   TradovateAccessTokenResponse,
   TradovateAccount,
+  TradovateApiKeyCredentials,
   TradovateCredentials,
   TradovateEnvironment,
+  TradovateOAuthCredentials,
   TradovateReportDefinition,
   TradovateReportRequestResponse,
 } from "./types";
+import { tradovateRefreshOAuthToken } from "./oauth";
 
 const APP_VERSION = "1.0.0";
 const DEVICE_ID = "trade-journal-sync-v1";
@@ -84,7 +87,7 @@ function sleep(ms: number): Promise<void> {
 
 export async function tradovateAccessToken(
   username: string,
-  creds: Pick<TradovateCredentials, "password" | "cid" | "sec" | "appId" | "environment">
+  creds: Pick<TradovateApiKeyCredentials, "password" | "cid" | "sec" | "appId" | "environment">
 ): Promise<string> {
   const cid = Number(creds.cid);
   if (!Number.isFinite(cid) || cid <= 0) {
@@ -117,6 +120,39 @@ export async function tradovateAccessToken(
     throw new TradovateApiError("Authentication succeeded but no access token was returned");
   }
   return data.accessToken;
+}
+
+function isOAuthCredentials(creds: TradovateCredentials): creds is TradovateOAuthCredentials {
+  return creds.authType === "oauth" || "refreshToken" in creds;
+}
+
+export async function resolveTradovateAccessToken(
+  username: string,
+  creds: TradovateCredentials
+): Promise<{ token: string; updatedCreds?: TradovateOAuthCredentials }> {
+  if (isOAuthCredentials(creds)) {
+    if (creds.accessToken) {
+      return { token: creds.accessToken };
+    }
+    const refreshed = await tradovateRefreshOAuthToken(creds.environment, creds.refreshToken);
+    if (!refreshed.access_token) {
+      throw new TradovateApiError("OAuth refresh did not return an access token");
+    }
+    return {
+      token: refreshed.access_token,
+      updatedCreds: {
+        authType: "oauth",
+        refreshToken: refreshed.refresh_token || creds.refreshToken,
+        accessToken: refreshed.access_token,
+        environment: creds.environment,
+      },
+    };
+  }
+
+  const apiKeyCreds = creds as TradovateApiKeyCredentials;
+  return {
+    token: await tradovateAccessToken(username, apiKeyCreds),
+  };
 }
 
 async function authFetch<T>(
@@ -388,7 +424,7 @@ export async function tradovateFetchPositionHistoryCsv(
 
 export async function tradovateLoginAndListAccounts(
   username: string,
-  creds: TradovateCredentials
+  creds: TradovateApiKeyCredentials
 ): Promise<{ token: string; accounts: TradovateAccount[] }> {
   const token = await tradovateAccessToken(username, creds);
   const accounts = await tradovateListAccounts(token, creds.environment);

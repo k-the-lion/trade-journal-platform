@@ -16,11 +16,12 @@ import {
   markTradovateSyncError,
   runTradovateSyncForConnection,
 } from "@/lib/brokers/run-tradovate-sync";
+import { tradovateListAccounts, TradovateApiError } from "@/lib/brokers/tradovate/client";
 import {
-  tradovateLoginAndListAccounts,
-  TradovateApiError,
-} from "@/lib/brokers/tradovate/client";
-import type { TradovateCredentials, TradovateEnvironment } from "@/lib/brokers/tradovate/types";
+  clearTradovateOAuthPendingSession,
+  getTradovateOAuthPendingSession,
+} from "@/lib/brokers/tradovate/oauth-session";
+import type { TradovateEnvironment } from "@/lib/brokers/tradovate/types";
 import type { BrokerSyncConnection, BrokerSyncConnectionPublic } from "@/lib/types/database";
 
 export type TopstepXAccountOption = {
@@ -166,23 +167,28 @@ export async function disconnectBrokerSync(connectionId: string) {
   revalidatePath("/import");
 }
 
-export async function verifyTradovateCredentials(input: {
+export async function loadTradovateOAuthAccounts(): Promise<{
+  accounts: TradovateAccountOption[];
   username: string;
-  password: string;
-  cid: string;
-  sec: string;
-  appId?: string;
-  environment?: TradovateEnvironment;
-}): Promise<{ accounts: TradovateAccountOption[] }> {
+  displayName: string;
+  environment: TradovateEnvironment;
+} | null> {
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
 
-  const creds = buildTradovateCredentials(input);
+  const session = await getTradovateOAuthPendingSession();
+  if (!session) return null;
 
   try {
-    const { accounts } = await tradovateLoginAndListAccounts(input.username.trim(), creds);
+    const accounts = await tradovateListAccounts(session.accessToken, session.environment);
+    if (!accounts.length) {
+      throw new Error("No Tradovate accounts found for this login");
+    }
     return {
       accounts: accounts.map((a) => ({ id: a.id, name: a.name })),
+      username: session.username,
+      displayName: session.displayName,
+      environment: session.environment,
     };
   } catch (err) {
     if (err instanceof TradovateApiError) {
@@ -192,35 +198,7 @@ export async function verifyTradovateCredentials(input: {
   }
 }
 
-function buildTradovateCredentials(input: {
-  password: string;
-  cid: string;
-  sec: string;
-  appId?: string;
-  environment?: TradovateEnvironment;
-}): TradovateCredentials {
-  const trimmedPassword = input.password.trim();
-  const trimmedCid = input.cid.trim();
-  const trimmedSec = input.sec.trim();
-  if (!trimmedPassword || !trimmedCid || !trimmedSec) {
-    throw new Error("Password, API Client ID, and API Secret are required");
-  }
-  return {
-    password: trimmedPassword,
-    cid: trimmedCid,
-    sec: trimmedSec,
-    appId: input.appId?.trim() || "TradeJournal",
-    environment: input.environment ?? "live",
-  };
-}
-
-export async function connectTradovate(input: {
-  username: string;
-  password: string;
-  cid: string;
-  sec: string;
-  appId?: string;
-  environment?: TradovateEnvironment;
+export async function connectTradovateOAuth(input: {
   externalAccountId: number;
   externalAccountName: string;
   tradingAccountId: string;
@@ -233,21 +211,20 @@ export async function connectTradovate(input: {
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
 
-  const trimmedUser = input.username.trim();
-  if (!trimmedUser) throw new Error("Username is required");
   if (!input.tradingAccountId) {
     throw new Error("Select a journal account for imported trades");
   }
 
-  const creds = buildTradovateCredentials(input);
-  await verifyTradovateCredentials({ username: trimmedUser, ...creds });
+  const session = await getTradovateOAuthPendingSession();
+  if (!session) {
+    throw new Error("Tradovate login expired — click Connect with Tradovate again");
+  }
 
   const credentials_encrypted = encryptJson({
-    password: creds.password,
-    cid: creds.cid,
-    sec: creds.sec,
-    appId: creds.appId,
-    environment: creds.environment,
+    authType: "oauth",
+    refreshToken: session.refreshToken,
+    accessToken: session.accessToken,
+    environment: session.environment,
   });
   const externalId = String(input.externalAccountId);
   const autoSync = input.syncMode === "auto";
@@ -259,7 +236,7 @@ export async function connectTradovate(input: {
         user_id: profile.id,
         provider: "tradovate",
         label: input.externalAccountName,
-        username: trimmedUser,
+        username: session.username,
         credentials_encrypted,
         external_account_id: externalId,
         external_account_name: input.externalAccountName,
@@ -279,6 +256,8 @@ export async function connectTradovate(input: {
     .single();
 
   if (error) throw new Error(error.message);
+
+  await clearTradovateOAuthPendingSession();
 
   revalidatePath("/import");
   const { credentials_encrypted: _removed, ...publicConnection } = data as BrokerSyncConnection;

@@ -1,5 +1,5 @@
 import type { createClient } from "@/lib/supabase/server";
-import { decryptJson } from "@/lib/crypto/credentials";
+import { decryptJson, encryptJson } from "@/lib/crypto/credentials";
 import { fetchTradovateTrades } from "@/lib/brokers/tradovate/sync";
 import type { TradovateCredentials } from "@/lib/brokers/tradovate/types";
 import { persistImportedTrades, type PersistImportResult } from "@/lib/imports/persist";
@@ -13,7 +13,7 @@ export async function runTradovateSyncForConnection(
   connection: BrokerSyncConnection
 ): Promise<PersistImportResult> {
   const creds = decryptJson<TradovateCredentials>(connection.credentials_encrypted);
-  const rows = await fetchTradovateTrades(
+  const { rows, updatedCreds } = await fetchTradovateTrades(
     connection.username,
     creds,
     Number(connection.external_account_id),
@@ -43,6 +43,11 @@ export async function runTradovateSyncForConnection(
       last_sync_status: "success",
       last_sync_error: null,
       last_sync_imported: result.imported,
+      ...(updatedCreds
+        ? {
+            credentials_encrypted: encryptJson(updatedCreds),
+          }
+        : {}),
     })
     .eq("id", connection.id);
 

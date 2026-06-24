@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createTradingAccount } from "@/lib/actions";
 import {
-  connectTradovate,
+  connectTradovateOAuth,
   disconnectBrokerSync,
+  loadTradovateOAuthAccounts,
   syncTradovateConnection,
   updateBrokerSyncMode,
-  verifyTradovateCredentials,
   type BrokerSyncMode,
   type TradovateAccountOption,
 } from "@/lib/actions/broker-sync";
@@ -17,12 +17,17 @@ import type { BrokerSyncConnectionPublic } from "@/lib/types/database";
 
 type AccountOption = { id: string; name: string; is_default?: boolean };
 
+const TRADOVATE_SUPPORT_URL =
+  "https://support.ninjatrader.com/s/article/Tradovate-API-Access?language=en_US";
+
 export function TradovateSyncPanel({
+  oauthConfigured,
   connections: initialConnections,
   accountOptions: initialAccountOptions,
   strategyOptions = [],
   orgOptions = [],
 }: {
+  oauthConfigured: boolean;
   connections: BrokerSyncConnectionPublic[];
   accountOptions: AccountOption[];
   strategyOptions?: { id: string; name: string }[];
@@ -30,12 +35,8 @@ export function TradovateSyncPanel({
 }) {
   const [connections, setConnections] = useState(initialConnections);
   const [accountOptions, setAccountOptions] = useState(initialAccountOptions);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [cid, setCid] = useState("");
-  const [sec, setSec] = useState("");
-  const [appId, setAppId] = useState("TradeJournal");
   const [environment, setEnvironment] = useState<TradovateEnvironment>("live");
+  const [tradovateUser, setTradovateUser] = useState<string | null>(null);
   const [tradovateAccounts, setTradovateAccounts] = useState<TradovateAccountOption[]>([]);
   const [externalAccountId, setExternalAccountId] = useState("");
   const [tradingAccountId, setTradingAccountId] = useState(
@@ -47,7 +48,7 @@ export function TradovateSyncPanel({
   const [syncFrom, setSyncFrom] = useState("");
   const [syncMode, setSyncMode] = useState<BrokerSyncMode>("manual");
   const [orgId, setOrgId] = useState("");
-  const [verifying, setVerifying] = useState(false);
+  const [connectingOAuth, setConnectingOAuth] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -59,14 +60,40 @@ export function TradovateSyncPanel({
   const [newAccountName, setNewAccountName] = useState("");
   const [creatingAccount, setCreatingAccount] = useState(false);
 
-  const credentialInput = {
-    username,
-    password,
-    cid,
-    sec,
-    appId,
-    environment,
-  };
+  const loadPendingAccounts = useCallback(async () => {
+    const pending = await loadTradovateOAuthAccounts();
+    if (!pending) return false;
+    setTradovateUser(pending.displayName);
+    setTradovateAccounts(pending.accounts);
+    setEnvironment(pending.environment);
+    if (pending.accounts.length === 1) {
+      setExternalAccountId(String(pending.accounts[0]!.id));
+    }
+    setMessage(`Signed in to Tradovate as ${pending.displayName}. Pick the account to sync.`);
+    return true;
+  }, []);
+
+  useEffect(() => {
+    void loadPendingAccounts();
+  }, [loadPendingAccounts]);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as { type?: string; ok?: boolean; error?: string } | null;
+      if (!data || data.type !== "tradovate-oauth") return;
+
+      setConnectingOAuth(false);
+      if (data.ok) {
+        void loadPendingAccounts();
+      } else {
+        setError(data.error || "Tradovate login was cancelled or failed");
+      }
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [loadPendingAccounts]);
 
   async function handleCreateAccount() {
     if (!newAccountName.trim()) {
@@ -98,24 +125,39 @@ export function TradovateSyncPanel({
     }
   }
 
-  async function handleVerify() {
-    setVerifying(true);
+  function handleConnectTradovate() {
+    if (!oauthConfigured) {
+      setError("Tradovate OAuth is not configured on this deployment yet.");
+      return;
+    }
+
+    setConnectingOAuth(true);
     setError(null);
     setMessage(null);
     setTradovateAccounts([]);
+    setTradovateUser(null);
     setExternalAccountId("");
-    try {
-      const { accounts } = await verifyTradovateCredentials(credentialInput);
-      setTradovateAccounts(accounts);
-      if (accounts.length === 1) {
-        setExternalAccountId(String(accounts[0]!.id));
-      }
-      setMessage(`Found ${accounts.length} Tradovate account${accounts.length === 1 ? "" : "s"}.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Verification failed");
-    } finally {
-      setVerifying(false);
+
+    const url = `/api/brokers/tradovate/authorize?environment=${environment}`;
+    const popup = window.open(
+      url,
+      "tradovate-oauth",
+      "width=520,height=720,menubar=no,toolbar=no,location=yes,status=no"
+    );
+
+    if (!popup) {
+      setConnectingOAuth(false);
+      window.location.href = url;
+      return;
     }
+
+    const timer = window.setInterval(() => {
+      if (popup.closed) {
+        window.clearInterval(timer);
+        setConnectingOAuth(false);
+        void loadPendingAccounts();
+      }
+    }, 500);
   }
 
   async function handleConnect() {
@@ -133,8 +175,7 @@ export function TradovateSyncPanel({
     setError(null);
     setMessage(null);
     try {
-      const connection = await connectTradovate({
-        ...credentialInput,
+      const connection = await connectTradovateOAuth({
         externalAccountId: selected.id,
         externalAccountName: selected.name,
         tradingAccountId,
@@ -147,12 +188,13 @@ export function TradovateSyncPanel({
         const without = prev.filter((c) => c.id !== connection.id);
         return [connection, ...without];
       });
-      setPassword("");
-      setSec("");
+      setTradovateAccounts([]);
+      setTradovateUser(null);
+      setExternalAccountId("");
       setMessage(
         `Connected to ${selected.name}.` +
           (syncMode === "auto"
-            ? " Auto-sync every 15 minutes is on — run Sync now for an immediate import."
+            ? " Auto-sync is on — run Sync now for an immediate import."
             : " Run Sync now when you want to import trades.")
       );
     } catch (err) {
@@ -214,7 +256,7 @@ export function TradovateSyncPanel({
       );
       setMessage(
         mode === "auto"
-          ? "Auto-sync enabled — trades import every 15 minutes."
+          ? "Auto-sync enabled."
           : "Manual sync only — use Sync now when you want fresh trades."
       );
     } catch (err) {
@@ -246,19 +288,19 @@ export function TradovateSyncPanel({
         <div>
           <h2 className="font-medium">Connect Tradovate</h2>
           <p className="text-xs text-muted mt-1">
-            Requires Tradovate{" "}
-            <a
-              href="https://tradovate.com/api-access/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              API Access
-            </a>{" "}
-            ($25/mo) and an API key from Application Settings. Works with Apex, Tradeify, TPT, and
-            other Tradovate-based prop firms when API is enabled on the account.
+            Sign in with your Tradovate account — same flow as TradingView or other connected apps.
+            Works with Apex, Tradeify, TPT, and other Tradovate-based firms when your account allows
+            third-party access.
           </p>
         </div>
+
+        {!oauthConfigured && (
+          <div className="text-sm rounded-md p-3 border border-amber-500/30 bg-amber-500/10 text-amber-100">
+            OAuth is not configured on this site yet (admin must register the app with Tradovate).
+            Until then, use the <strong className="text-foreground">CSV upload</strong> tab → Tradovate
+            Position History export.
+          </div>
+        )}
 
         <div>
           <label className="label">Environment</label>
@@ -284,82 +326,25 @@ export function TradovateSyncPanel({
             ))}
           </div>
           <p className="text-xs text-muted mt-1">
-            Use Demo for sim/eval accounts; Live for funded brokerage accounts.
+            Choose the environment that matches where you trade before connecting.
           </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="label">Tradovate username</label>
-            <input
-              className="input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Login username"
-              autoComplete="username"
-            />
-          </div>
-          <div>
-            <label className="label">Password</label>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Account or API password"
-              autoComplete="current-password"
-            />
-          </div>
-          <div>
-            <label className="label">API Client ID (cid)</label>
-            <input
-              className="input"
-              value={cid}
-              onChange={(e) => setCid(e.target.value)}
-              placeholder="Numeric ID from API key"
-              autoComplete="off"
-            />
-          </div>
-          <div>
-            <label className="label">API Secret</label>
-            <input
-              className="input"
-              type="password"
-              value={sec}
-              onChange={(e) => setSec(e.target.value)}
-              placeholder="Secret shown once at key creation"
-              autoComplete="off"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="label">API key name (appId)</label>
-            <input
-              className="input"
-              value={appId}
-              onChange={(e) => setAppId(e.target.value)}
-              placeholder="Name you gave the API key"
-              autoComplete="off"
-            />
-          </div>
         </div>
 
         <button
           type="button"
-          className="btn btn-secondary text-sm"
-          disabled={
-            verifying ||
-            !username.trim() ||
-            !password.trim() ||
-            !cid.trim() ||
-            !sec.trim()
-          }
-          onClick={handleVerify}
+          className="btn btn-primary"
+          disabled={connectingOAuth || !oauthConfigured}
+          onClick={handleConnectTradovate}
         >
-          {verifying ? "Verifying…" : "Verify & load accounts"}
+          {connectingOAuth ? "Waiting for Tradovate…" : "Connect with Tradovate"}
         </button>
 
-        {tradovateAccounts.length > 0 && (
+        {tradovateUser && tradovateAccounts.length > 0 && (
           <div className="space-y-4 pt-2 border-t border-border/60">
+            <p className="text-sm text-muted">
+              Logged in as <span className="text-foreground">{tradovateUser}</span>
+            </p>
+
             <div>
               <label className="label">Tradovate account</label>
               <select
@@ -457,7 +442,7 @@ export function TradovateSyncPanel({
                 {(
                   [
                     ["manual", "Manual only"],
-                    ["auto", "Auto every 15 min"],
+                    ["auto", "Auto sync"],
                   ] as const
                 ).map(([mode, label]) => (
                   <button
@@ -484,9 +469,6 @@ export function TradovateSyncPanel({
                 value={syncFrom}
                 onChange={(e) => setSyncFrom(e.target.value)}
               />
-              <p className="text-xs text-muted mt-1">
-                Leave empty to pull up to 12 months of Position History on first sync.
-              </p>
             </div>
 
             {orgOptions.length > 0 && (
@@ -511,10 +493,23 @@ export function TradovateSyncPanel({
             >
               {connecting
                 ? "Connecting…"
-                : `Connect${selectedTradovateName ? ` ${selectedTradovateName}` : ""}`}
+                : `Save connection${selectedTradovateName ? ` — ${selectedTradovateName}` : ""}`}
             </button>
           </div>
         )}
+
+        <p className="text-xs text-muted">
+          App developers: register OAuth in Tradovate → Application Settings → API Access. See{" "}
+          <a
+            href={TRADOVATE_SUPPORT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline"
+          >
+            NinjaTrader&apos;s Tradovate API guide
+          </a>
+          .
+        </p>
       </div>
 
       {connections.length > 0 && (
@@ -531,7 +526,7 @@ export function TradovateSyncPanel({
                   </p>
                   <p className="text-xs text-muted mt-0.5">
                     User: {c.username}
-                    {(c.auto_sync ?? false) ? " · Auto-sync every 15 min" : " · Manual sync"}
+                    {(c.auto_sync ?? false) ? " · Auto-sync" : " · Manual sync"}
                     {c.last_synced_at
                       ? ` · Last sync ${new Date(c.last_synced_at).toLocaleString()}`
                       : " · Never synced"}
@@ -539,18 +534,12 @@ export function TradovateSyncPanel({
                   {c.last_sync_status === "error" && c.last_sync_error && (
                     <p className="text-xs text-danger mt-1">{c.last_sync_error}</p>
                   )}
-                  {c.last_sync_status === "success" && c.last_sync_imported > 0 && (
-                    <p className="text-xs text-muted mt-1">
-                      Last run imported {c.last_sync_imported} trade
-                      {c.last_sync_imported === 1 ? "" : "s"}
-                    </p>
-                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {(
                     [
                       ["manual", "Manual"],
-                      ["auto", "Auto 15 min"],
+                      ["auto", "Auto"],
                     ] as const
                   ).map(([mode, label]) => (
                     <button
