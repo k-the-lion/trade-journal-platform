@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchFinnhubCalendar } from "@/lib/economic-calendar/finnhub";
-import { getFinnhubApiKey } from "@/lib/economic-calendar/finnhub-key";
+import { hasCalendarApiKey, CALENDAR_KEY_SETUP_HINT } from "@/lib/economic-calendar/api-keys";
+import { fetchEconomicCalendar } from "@/lib/economic-calendar/provider";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,17 +18,16 @@ export async function GET(request: Request) {
   }
 
   try {
-    if (!getFinnhubApiKey()) {
+    if (!hasCalendarApiKey()) {
       return NextResponse.json(
         {
-          error:
-            "FINNHUB_API_KEY is not configured. In Vercel, add FINNHUB_API_KEY (exact name, Production environment) and redeploy.",
+          error: `No calendar API key configured. ${CALENDAR_KEY_SETUP_HINT}`,
         },
         { status: 503 }
       );
     }
 
-    const events = await fetchFinnhubCalendar(from, to);
+    const events = await fetchEconomicCalendar(from, to);
     return NextResponse.json(
       { events },
       {
@@ -40,7 +39,10 @@ export async function GET(request: Request) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to load economic calendar";
-    const status = message.includes("FINNHUB_API_KEY") ? 503 : 502;
+    const status =
+      message.includes("not configured") || message.includes("FMP_API_KEY")
+        ? 503
+        : 502;
     return NextResponse.json({ error: message }, { status });
   }
 }

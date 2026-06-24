@@ -1,5 +1,5 @@
 import { categorizeEvent } from "./categories";
-import { getFinnhubApiKey, FINNHUB_KEY_SETUP_HINT } from "./finnhub-key";
+import { getFinnhubApiKey } from "./api-keys";
 import type { EconomicEvent, EventImpact } from "./types";
 import { formatTimeEt, toDateKey } from "./utils";
 
@@ -88,7 +88,7 @@ export async function fetchFinnhubCalendar(
 ): Promise<EconomicEvent[]> {
   const token = getFinnhubApiKey();
   if (!token) {
-    throw new Error(`FINNHUB_API_KEY is not configured. ${FINNHUB_KEY_SETUP_HINT}`);
+    throw new Error("Finnhub API key is not configured.");
   }
 
   const url = new URL("https://finnhub.io/api/v1/calendar/economic");
