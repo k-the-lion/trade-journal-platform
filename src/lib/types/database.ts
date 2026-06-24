@@ -120,6 +120,7 @@ export interface BrokerSyncConnection {
   last_sync_error: string | null;
   last_sync_imported: number;
   is_active: boolean;
+  auto_sync: boolean;
   created_at: string;
   updated_at: string;
 }

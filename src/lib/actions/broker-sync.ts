@@ -2,21 +2,24 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient, getProfile } from "@/lib/supabase/server";
-import { encryptJson, decryptJson } from "@/lib/crypto/credentials";
+import { encryptJson } from "@/lib/crypto/credentials";
 import {
   topstepxListAccounts,
   topstepxLoginWithFallback,
   TopstepXApiError,
 } from "@/lib/brokers/topstepx/client";
-import { fetchTopstepXTrades } from "@/lib/brokers/topstepx/sync";
-import { persistImportedTrades } from "@/lib/imports/persist";
-import { resolveStrategyFields } from "@/lib/strategies/sync";
+import {
+  markTopstepXSyncError,
+  runTopstepXSyncForConnection,
+} from "@/lib/brokers/run-topstepx-sync";
 import type { BrokerSyncConnection, BrokerSyncConnectionPublic } from "@/lib/types/database";
 
 export type TopstepXAccountOption = {
   id: number;
   name: string;
 };
+
+export type BrokerSyncMode = "manual" | "auto";
 
 export async function verifyTopstepXCredentials(
   username: string,
@@ -57,6 +60,7 @@ export async function connectTopstepX(input: {
   strategyId?: string | null;
   syncFrom?: string | null;
   orgId?: string | null;
+  syncMode?: BrokerSyncMode;
 }) {
   const supabase = await createClient();
   const profile = await getProfile();
@@ -75,6 +79,7 @@ export async function connectTopstepX(input: {
 
   const credentials_encrypted = encryptJson({ apiKey: trimmedKey });
   const externalId = String(input.externalAccountId);
+  const autoSync = input.syncMode === "auto";
 
   const { data, error } = await supabase
     .from("broker_sync_connections")
@@ -91,6 +96,7 @@ export async function connectTopstepX(input: {
         strategy_id: input.strategyId ?? null,
         org_id: input.orgId ?? null,
         sync_from: input.syncFrom ? new Date(input.syncFrom).toISOString() : null,
+        auto_sync: autoSync,
         last_sync_status: "never",
         last_sync_error: null,
         last_sync_imported: 0,
@@ -106,6 +112,29 @@ export async function connectTopstepX(input: {
   revalidatePath("/import");
   const { credentials_encrypted: _removed, ...publicConnection } = data as BrokerSyncConnection;
   return publicConnection;
+}
+
+export async function updateBrokerSyncMode(
+  connectionId: string,
+  syncMode: BrokerSyncMode
+) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { data, error } = await supabase
+    .from("broker_sync_connections")
+    .update({ auto_sync: syncMode === "auto" })
+    .eq("id", connectionId)
+    .eq("user_id", profile.id)
+    .select(
+      "id, user_id, provider, label, username, external_account_id, external_account_name, trading_account_id, strategy_id, org_id, sync_from, auto_sync, last_synced_at, last_sync_status, last_sync_error, last_sync_imported, is_active, created_at, updated_at"
+    )
+    .single();
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/import");
+  return data as BrokerSyncConnectionPublic;
 }
 
 export async function disconnectBrokerSync(connectionId: string) {
@@ -140,42 +169,11 @@ export async function syncTopstepXConnection(connectionId: string) {
     throw new Error("TopstepX connection not found");
   }
 
-  const row = connection as BrokerSyncConnection;
-
   try {
-    const { apiKey } = decryptJson<{ apiKey: string }>(row.credentials_encrypted);
-    const rows = await fetchTopstepXTrades(
-      row.username,
-      apiKey,
-      Number(row.external_account_id),
-      row.sync_from,
-      row.last_synced_at
-    );
-
-    const strategyFields = row.strategy_id
-      ? await resolveStrategyFields(supabase, profile.id, row.strategy_id)
-      : { strategy_id: null, setup_tag: null };
-
-    const result = await persistImportedTrades({
+    const result = await runTopstepXSyncForConnection(
       supabase,
-      userId: profile.id,
-      rows,
-      tradeSource: "topstepx",
-      jobSource: "topstepx",
-      orgId: row.org_id,
-      accountId: row.trading_account_id,
-      strategyFields,
-    });
-
-    await supabase
-      .from("broker_sync_connections")
-      .update({
-        last_synced_at: new Date().toISOString(),
-        last_sync_status: "success",
-        last_sync_error: null,
-        last_sync_imported: result.imported,
-      })
-      .eq("id", connectionId);
+      connection as BrokerSyncConnection
+    );
 
     revalidatePath("/import");
     revalidatePath("/trades");
@@ -185,13 +183,7 @@ export async function syncTopstepXConnection(connectionId: string) {
     return result;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Sync failed";
-    await supabase
-      .from("broker_sync_connections")
-      .update({
-        last_sync_status: "error",
-        last_sync_error: message,
-      })
-      .eq("id", connectionId);
+    await markTopstepXSyncError(supabase, connectionId, message);
     revalidatePath("/import");
     throw new Error(message);
   }

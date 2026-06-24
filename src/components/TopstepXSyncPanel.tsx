@@ -7,7 +7,9 @@ import {
   connectTopstepX,
   disconnectBrokerSync,
   syncTopstepXConnection,
+  updateBrokerSyncMode,
   verifyTopstepXCredentials,
+  type BrokerSyncMode,
   type TopstepXAccountOption,
 } from "@/lib/actions/broker-sync";
 import type { BrokerSyncConnectionPublic } from "@/lib/types/database";
@@ -38,6 +40,7 @@ export function TopstepXSyncPanel({
   );
   const [strategyId, setStrategyId] = useState("");
   const [syncFrom, setSyncFrom] = useState("");
+  const [syncMode, setSyncMode] = useState<BrokerSyncMode>("manual");
   const [orgId, setOrgId] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -125,13 +128,19 @@ export function TopstepXSyncPanel({
         strategyId: strategyId || null,
         syncFrom: syncFrom || null,
         orgId: orgId || null,
+        syncMode,
       });
       setConnections((prev) => {
         const without = prev.filter((c) => c.id !== connection.id);
         return [connection, ...without];
       });
       setApiKey("");
-      setMessage(`Connected to ${selected.name}. Run your first sync below.`);
+      setMessage(
+        `Connected to ${selected.name}.` +
+          (syncMode === "auto"
+            ? " Auto-sync every 15 minutes is on — run Sync now for an immediate import."
+            : " Run Sync now when you want to import trades.")
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Connection failed");
     } finally {
@@ -179,6 +188,23 @@ export function TopstepXSyncPanel({
       );
     } finally {
       setSyncingId(null);
+    }
+  }
+
+  async function handleSyncModeChange(connectionId: string, mode: BrokerSyncMode) {
+    setError(null);
+    try {
+      const updated = await updateBrokerSyncMode(connectionId, mode);
+      setConnections((prev) =>
+        prev.map((c) => (c.id === connectionId ? { ...c, ...updated } : c))
+      );
+      setMessage(
+        mode === "auto"
+          ? "Auto-sync enabled — trades import every 15 minutes."
+          : "Manual sync only — use Sync now when you want fresh trades."
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update sync mode");
     }
   }
 
@@ -346,6 +372,34 @@ export function TopstepXSyncPanel({
             </div>
 
             <div>
+              <label className="label">Sync schedule</label>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["manual", "Manual only"],
+                    ["auto", "Auto every 15 min"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setSyncMode(mode)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      syncMode === mode
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border text-muted hover:border-primary/40"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted mt-1">
+                Manual still lets you press Sync now anytime. Auto runs in the background on Vercel.
+              </p>
+            </div>
+
+            <div>
               <label className="label">Sync trades from (optional)</label>
               <input
                 className="input"
@@ -393,45 +447,65 @@ export function TopstepXSyncPanel({
           </div>
           <ul className="divide-y divide-border/50">
             {connections.map((c) => (
-              <li key={c.id} className="px-4 py-4 space-y-2">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-sm">
-                      {c.external_account_name ?? c.label ?? "TopstepX account"}
+              <li key={c.id} className="px-4 py-4 space-y-3">
+                <div>
+                  <p className="font-medium text-sm">
+                    {c.external_account_name ?? c.label ?? "TopstepX account"}
+                  </p>
+                  <p className="text-xs text-muted mt-0.5">
+                    User: {c.username}
+                    {(c.auto_sync ?? false) ? " · Auto-sync every 15 min" : " · Manual sync"}
+                    {c.last_synced_at
+                      ? ` · Last sync ${new Date(c.last_synced_at).toLocaleString()}`
+                      : " · Never synced"}
+                  </p>
+                  {c.last_sync_status === "error" && c.last_sync_error && (
+                    <p className="text-xs text-danger mt-1">{c.last_sync_error}</p>
+                  )}
+                  {c.last_sync_status === "success" && c.last_sync_imported > 0 && (
+                    <p className="text-xs text-muted mt-1">
+                      Last run imported {c.last_sync_imported} trade
+                      {c.last_sync_imported === 1 ? "" : "s"}
                     </p>
-                    <p className="text-xs text-muted mt-0.5">
-                      User: {c.username}
-                      {c.last_synced_at
-                        ? ` · Last sync ${new Date(c.last_synced_at).toLocaleString()}`
-                        : " · Never synced"}
-                    </p>
-                    {c.last_sync_status === "error" && c.last_sync_error && (
-                      <p className="text-xs text-danger mt-1">{c.last_sync_error}</p>
-                    )}
-                    {c.last_sync_status === "success" && c.last_sync_imported > 0 && (
-                      <p className="text-xs text-muted mt-1">
-                        Last run imported {c.last_sync_imported} trade
-                        {c.last_sync_imported === 1 ? "" : "s"}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["manual", "Manual"],
+                      ["auto", "Auto 15 min"],
+                    ] as const
+                  ).map(([mode, label]) => (
                     <button
+                      key={mode}
                       type="button"
-                      className="btn btn-primary text-sm py-1.5 px-3"
-                      disabled={syncingId === c.id}
-                      onClick={() => handleSync(c.id)}
+                      onClick={() => handleSyncModeChange(c.id, mode)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        ((c.auto_sync ?? false) ? "auto" : "manual") === mode
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border text-muted hover:border-primary/40"
+                      }`}
                     >
-                      {syncingId === c.id ? "Syncing…" : "Sync now"}
+                      {label}
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary text-sm py-1.5 px-3"
-                      onClick={() => handleDisconnect(c.id)}
-                    >
-                      Disconnect
-                    </button>
-                  </div>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-primary text-sm py-1.5 px-3"
+                    disabled={syncingId === c.id}
+                    onClick={() => handleSync(c.id)}
+                  >
+                    {syncingId === c.id ? "Syncing…" : "Sync now"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-sm py-1.5 px-3"
+                    onClick={() => handleDisconnect(c.id)}
+                  >
+                    Disconnect
+                  </button>
                 </div>
               </li>
             ))}

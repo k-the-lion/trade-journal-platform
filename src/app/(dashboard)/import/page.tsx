@@ -47,7 +47,7 @@ export default async function ImportPage() {
       supabase
         .from("broker_sync_connections")
         .select(
-          "id, user_id, provider, label, username, external_account_id, external_account_name, trading_account_id, strategy_id, org_id, sync_from, last_synced_at, last_sync_status, last_sync_error, last_sync_imported, is_active, created_at, updated_at"
+          "id, user_id, provider, label, username, external_account_id, external_account_name, trading_account_id, strategy_id, org_id, sync_from, auto_sync, last_synced_at, last_sync_status, last_sync_error, last_sync_imported, is_active, created_at, updated_at"
         )
         .eq("user_id", profile!.id)
         .eq("provider", "topstepx")
