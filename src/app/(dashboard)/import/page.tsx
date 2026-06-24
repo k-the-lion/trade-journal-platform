@@ -1,6 +1,7 @@
 import { createClient, getProfile } from "@/lib/supabase/server";
-import { CsvImportForm } from "@/components/CsvImportForm";
+import { ImportTabs } from "@/components/ImportTabs";
 import { listImportAdapters } from "@/lib/imports";
+import type { BrokerSyncConnectionPublic } from "@/lib/types/database";
 
 async function getOrgOptions(userId: string) {
   const supabase = await createClient();
@@ -23,26 +24,35 @@ export default async function ImportPage() {
   const adapters = listImportAdapters();
 
   const supabase = await createClient();
-  const { data: jobs } = await supabase
-    .from("import_jobs")
-    .select("*")
-    .eq("user_id", profile!.id)
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  const { data: accounts } = await supabase
-    .from("trading_accounts")
-    .select("id, name, is_default")
-    .eq("user_id", profile!.id)
-    .order("is_default", { ascending: false })
-    .order("name");
-
-  const { data: strategies } = await supabase
-    .from("trading_strategies")
-    .select("id, name")
-    .eq("user_id", profile!.id)
-    .eq("is_active", true)
-    .order("name");
+  const [{ data: jobs }, { data: accounts }, { data: strategies }, { data: connections }] =
+    await Promise.all([
+      supabase
+        .from("import_jobs")
+        .select("*")
+        .eq("user_id", profile!.id)
+        .order("created_at", { ascending: false })
+        .limit(5),
+      supabase
+        .from("trading_accounts")
+        .select("id, name, is_default")
+        .eq("user_id", profile!.id)
+        .order("is_default", { ascending: false })
+        .order("name"),
+      supabase
+        .from("trading_strategies")
+        .select("id, name")
+        .eq("user_id", profile!.id)
+        .eq("is_active", true)
+        .order("name"),
+      supabase
+        .from("broker_sync_connections")
+        .select(
+          "id, user_id, provider, label, username, external_account_id, external_account_name, trading_account_id, strategy_id, org_id, sync_from, last_synced_at, last_sync_status, last_sync_error, last_sync_imported, is_active, created_at, updated_at"
+        )
+        .eq("user_id", profile!.id)
+        .eq("provider", "topstepx")
+        .order("created_at", { ascending: false }),
+    ]);
 
   const accountOptions = (accounts ?? []).map((a) => ({
     id: a.id,
@@ -55,91 +65,59 @@ export default async function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold">Import Trades</h1>
         <p className="text-muted text-sm mt-1">
-          Upload a CSV exported from TopStep X, Tradovate, TradingView, or any spreadsheet.
+          Sync from TopstepX automatically or upload a CSV from any supported broker.
         </p>
       </div>
 
+      <ImportTabs
+        orgOptions={orgOptions}
+        accountOptions={accountOptions}
+        strategyOptions={(strategies ?? []).map((s) => ({ id: s.id, name: s.name }))}
+        connections={(connections ?? []) as BrokerSyncConnectionPublic[]}
+      />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-5xl">
         <div className="card p-5 space-y-2">
-          <h2 className="font-medium text-sm">TopStep X</h2>
+          <h2 className="font-medium text-sm">TopStep X API</h2>
+          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
+            <li>Subscribe to ProjectX API in TopstepX Settings</li>
+            <li>Copy your username and API key</li>
+            <li>Connect above — first sync pulls your trade history</li>
+            <li>Use <strong className="text-foreground">Sync now</strong> anytime for new trades</li>
+          </ol>
+        </div>
+        <div className="card p-5 space-y-2">
+          <h2 className="font-medium text-sm">TopStep X CSV</h2>
           <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
             <li>Open TopStep X and select your account</li>
             <li>Go to the <strong className="text-foreground">Trades</strong> tab at the bottom</li>
             <li>Click <strong className="text-foreground">Export</strong> and choose your date range</li>
-            <li>Upload the CSV here — choose &quot;TopStep X&quot; or Auto-detect</li>
+            <li>Upload via the CSV tab — choose &quot;TopStep X&quot; or Auto-detect</li>
           </ol>
         </div>
         <div className="card p-5 space-y-2">
           <h2 className="font-medium text-sm">Tradovate</h2>
-          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
-            <li>Tradovate → <strong className="text-foreground">Accounts</strong> → gear icon</li>
-            <li>Use <strong className="text-foreground">Position History</strong> (best — includes P&L)</li>
-            <li>Or Reports → <strong className="text-foreground">Orders</strong> (not Performance)</li>
-            <li>Download CSV and upload — choose Tradovate preset</li>
-          </ol>
-        </div>
-        <div className="card p-5 space-y-2">
-          <h2 className="font-medium text-sm">TradingView</h2>
           <p className="text-xs text-muted">
-            Paper Trading → ⋯ menu → enable all columns → Export data from the active tab.
+            API sync coming soon. For now: Accounts → gear → <strong className="text-foreground">Position History</strong> → export CSV.
           </p>
-          <table className="w-full text-xs mt-2">
-            <thead>
-              <tr className="text-muted text-left">
-                <th className="pb-1 font-normal">Tab</th>
-                <th className="pb-1 font-normal">Import?</th>
-              </tr>
-            </thead>
-            <tbody className="text-muted">
-              <tr>
-                <td className="py-1 text-foreground">Balance History</td>
-                <td className="py-1 text-success">Yes — best</td>
-              </tr>
-              <tr>
-                <td className="py-1 text-foreground">Order History</td>
-                <td className="py-1 text-success">Yes</td>
-              </tr>
-              <tr>
-                <td className="py-1 text-foreground">Trading journal</td>
-                <td className="py-1 text-danger">No — activity log</td>
-              </tr>
-              <tr>
-                <td className="py-1 text-foreground">Positions</td>
-                <td className="py-1 text-danger">No — open only</td>
-              </tr>
-              <tr>
-                <td className="py-1 text-foreground">Orders</td>
-                <td className="py-1 text-danger">No — pending only</td>
-              </tr>
-            </tbody>
-          </table>
         </div>
       </div>
 
-      <CsvImportForm
-        orgOptions={orgOptions}
-        accountOptions={accountOptions}
-        strategyOptions={(strategies ?? []).map((s) => ({ id: s.id, name: s.name }))}
-      />
-
       <div className="card p-6 max-w-2xl space-y-3">
-        <h2 className="font-medium text-sm">Supported formats</h2>
+        <h2 className="font-medium text-sm">Supported CSV formats</h2>
         <ul className="text-sm text-muted space-y-2">
           {adapters.map((a) => (
             <li key={a.name}>
               <span className="text-foreground">{a.name}</span>
               {a.supportedFields && (
                 <span className="block text-xs mt-0.5">
-                  Columns: {a.supportedFields.join(", ")}
+                  Columns: {a.supportedFields.slice(0, 8).join(", ")}
+                  {a.supportedFields.length > 8 ? "…" : ""}
                 </span>
               )}
             </li>
           ))}
         </ul>
-        <p className="text-xs text-muted">
-          Tip: Don&apos;t edit the CSV in Excel before importing — it can break dates and numbers.
-          Re-importing the same file is safe — duplicate trades are detected automatically and skipped.
-        </p>
       </div>
 
       {(jobs ?? []).length > 0 && (
@@ -162,7 +140,9 @@ export default async function ImportPage() {
                   <td className="px-4 py-2">{j.created_at.slice(0, 10)}</td>
                   <td className="px-4 py-2 capitalize">{j.source}</td>
                   <td className="px-4 py-2 capitalize">{j.status}</td>
-                  <td className="px-4 py-2">{j.imported_count} / {j.row_count}</td>
+                  <td className="px-4 py-2">
+                    {j.imported_count} / {j.row_count}
+                  </td>
                 </tr>
               ))}
             </tbody>

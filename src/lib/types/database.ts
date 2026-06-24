@@ -2,8 +2,8 @@ export type PlatformRole = "admin" | "coach" | "student" | "solo";
 export type OrgMemberRole = "coach" | "student";
 export type TradeDirection = "long" | "short";
 export type AccountType = "eval" | "funded" | "personal";
-export type TradeSource = "manual" | "csv" | "tradovate" | "ninjatrader" | "tradingview" | "other";
-export type ImportSource = "csv" | "tradovate" | "ninjatrader" | "tradingview" | "other";
+export type TradeSource = "manual" | "csv" | "tradovate" | "ninjatrader" | "tradingview" | "topstepx" | "other";
+export type ImportSource = "csv" | "tradovate" | "ninjatrader" | "tradingview" | "topstepx" | "other";
 export type ImportStatus = "pending" | "processing" | "completed" | "failed";
 
 export interface Profile {
@@ -101,6 +101,33 @@ export interface TradingStrategy {
   created_at: string;
   updated_at: string;
 }
+
+export interface BrokerSyncConnection {
+  id: string;
+  user_id: string;
+  provider: "topstepx" | "tradovate";
+  label: string | null;
+  username: string;
+  credentials_encrypted: string;
+  external_account_id: string;
+  external_account_name: string | null;
+  trading_account_id: string | null;
+  strategy_id: string | null;
+  org_id: string | null;
+  sync_from: string | null;
+  last_synced_at: string | null;
+  last_sync_status: "success" | "error" | "never" | null;
+  last_sync_error: string | null;
+  last_sync_imported: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type BrokerSyncConnectionPublic = Omit<
+  BrokerSyncConnection,
+  "credentials_encrypted"
+>;
 
 export interface Trade {
   id: string;
@@ -237,6 +264,17 @@ export interface Database {
         Partial<TradingTagPreset>
       >;
       import_jobs: TableDef<ImportJob, Partial<ImportJob> & { user_id: string; source: ImportSource }, Partial<ImportJob>>;
+      broker_sync_connections: TableDef<
+        BrokerSyncConnection,
+        Partial<BrokerSyncConnection> & {
+          user_id: string;
+          provider: BrokerSyncConnection["provider"];
+          username: string;
+          credentials_encrypted: string;
+          external_account_id: string;
+        },
+        Partial<BrokerSyncConnection>
+      >;
       chat_sessions: TableDef<ChatSession, Partial<ChatSession> & { user_id: string }, Partial<ChatSession>>;
       chat_messages: TableDef<ChatMessage, Omit<ChatMessage, "id" | "created_at">, Partial<ChatMessage>>;
     };

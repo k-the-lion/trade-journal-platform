@@ -9,7 +9,8 @@ import { BUCKET, tradeScreenshotPath } from "@/lib/supabase/storage";
 import { isAllowedChartLink, normalizeChartLink } from "@/lib/screenshots";
 import { resolveStrategyFields } from "@/lib/strategies/sync";
 import { STRATEGY_TEMPLATES } from "@/lib/constants/strategies";
-import { normalizedToTradeInput, getImportAdapter } from "@/lib/imports/adapter";
+import { persistImportedTrades } from "@/lib/imports/persist";
+import { getImportAdapter } from "@/lib/imports/adapter";
 import {
   parseCsvTrades,
   type CsvColumnMapping,
@@ -698,99 +699,22 @@ export async function importCsvTrades(
         ? "tradingview"
         : "csv";
 
-  const { data: job, error: jobError } = await supabase
-    .from("import_jobs")
-    .insert({
-      user_id: profile.id,
-      org_id: orgId ?? null,
-      source: jobSource,
-      status: "processing",
-      row_count: result.rows.length,
-    })
-    .select()
-    .single();
-
-  if (jobError) throw new Error(jobError.message);
-
   const defaultStrategyFields = defaultStrategyId
     ? await resolveStrategyFields(supabase, profile.id, defaultStrategyId)
     : null;
 
-  const { data: existingTrades } = await supabase
-    .from("trades")
-    .select("external_id")
-    .eq("user_id", profile.id)
-    .eq("source", tradeSource)
-    .not("external_id", "is", null);
-
-  const existingIds = new Set(
-    ((existingTrades ?? []) as { external_id: string }[])
-      .map((t) => t.external_id)
-      .filter(Boolean)
-  );
-
-  let imported = 0;
-  let duplicatesSkipped = 0;
-  const insertErrors: string[] = [...result.errors];
-
-  for (const row of result.rows) {
-    const tradeInput = normalizedToTradeInput(row, tradeSource, row.external_id);
-    const strategyFields = defaultStrategyFields ?? {
-      strategy_id: null,
-      setup_tag: tradeInput.setup_tag,
-    };
-
-    const externalId =
-      tradeInput.external_id ??
-      `${tradeSource}-${tradeInput.traded_at.slice(0, 19)}-${tradeInput.symbol}-${tradeInput.direction}-${tradeInput.pnl}`;
-
-    if (existingIds.has(externalId)) {
-      duplicatesSkipped++;
-      continue;
-    }
-
-    const { error } = await supabase.from("trades").insert({
-      user_id: profile.id,
-      org_id: orgId ?? null,
-      traded_at: tradeInput.traded_at,
-      symbol: tradeInput.symbol,
-      direction: tradeInput.direction,
-      entry_price: tradeInput.entry_price,
-      exit_price: tradeInput.exit_price,
-      quantity: tradeInput.quantity,
-      pnl: tradeInput.pnl,
-      r_multiple: tradeInput.r_multiple,
-      setup_tag: strategyFields.setup_tag,
-      strategy_id: strategyFields.strategy_id,
-      notes: tradeInput.notes,
-      account_id: accountId ?? null,
-      source: tradeSource,
-      external_id: externalId,
-      import_job_id: job.id,
-    });
-
-    if (error) {
-      if (error.code === "23505") {
-        duplicatesSkipped++;
-        existingIds.add(externalId);
-      } else {
-        insertErrors.push(error.message);
-      }
-    } else {
-      imported++;
-      existingIds.add(externalId);
-    }
-  }
-
-  await supabase
-    .from("import_jobs")
-    .update({
-      status: insertErrors.length && imported === 0 ? "failed" : "completed",
-      imported_count: imported,
-      error_message: insertErrors.length ? insertErrors.slice(0, 5).join("; ") : null,
-      completed_at: new Date().toISOString(),
-    })
-    .eq("id", job.id);
+  const persistResult = await persistImportedTrades({
+    supabase,
+    userId: profile.id,
+    rows: result.rows,
+    parseErrors: result.errors,
+    parseSkipped: result.skipped,
+    tradeSource,
+    jobSource,
+    orgId,
+    accountId,
+    strategyFields: defaultStrategyFields ?? { strategy_id: null, setup_tag: null },
+  });
 
   revalidatePath("/trades");
   revalidatePath("/import");
@@ -798,11 +722,11 @@ export async function importCsvTrades(
   revalidatePath("/reports");
 
   return {
-    imported,
-    skipped: result.skipped + duplicatesSkipped,
-    duplicatesSkipped,
-    errors: insertErrors,
-    jobId: job.id,
+    imported: persistResult.imported,
+    skipped: persistResult.skipped,
+    duplicatesSkipped: persistResult.duplicatesSkipped,
+    errors: persistResult.errors,
+    jobId: persistResult.jobId,
   };
 }
 
