@@ -41,7 +41,15 @@ export function EquityCurveChart({ data }: { data: EquityPoint[] }) {
   );
 }
 
-export function BreakdownChart({ data, title }: { data: BreakdownItem[]; title: string }) {
+export function BreakdownChart({
+  data,
+  title,
+  labelWidth = 88,
+}: {
+  data: BreakdownItem[];
+  title: string;
+  labelWidth?: number;
+}) {
   if (data.length === 0) {
     return (
       <div className="card p-6 text-center text-muted text-sm">
@@ -57,7 +65,7 @@ export function BreakdownChart({ data, title }: { data: BreakdownItem[]; title: 
         <BarChart data={data.slice(0, 8)} layout="vertical">
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
           <XAxis type="number" tick={{ fill: "#94a3b8", fontSize: 11 }} />
-          <YAxis type="category" dataKey="label" width={80} tick={{ fill: "#94a3b8", fontSize: 11 }} />
+          <YAxis type="category" dataKey="label" width={labelWidth} tick={{ fill: "#94a3b8", fontSize: 11 }} />
           <Tooltip
             contentStyle={{ background: "#1e293b", border: "1px solid #334155" }}
           />

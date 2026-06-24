@@ -144,14 +144,44 @@ export function computeEquityCurve(trades: Trade[]): EquityPoint[] {
 
 export function breakdownByField(
   trades: Trade[],
-  getLabel: (t: Trade) => string | null | undefined
+  getLabel: (t: Trade) => string | null | undefined,
+  unsetLabel = "Unassigned"
 ): BreakdownItem[] {
   const groups = new Map<string, Trade[]>();
   for (const t of trades) {
-    const label = getLabel(t) || "Unknown";
+    const label = getLabel(t)?.trim() || unsetLabel;
     const list = groups.get(label) ?? [];
     list.push(t);
     groups.set(label, list);
+  }
+
+  return [...groups.entries()]
+    .map(([label, group]) => {
+      const wins = group.filter((t) => t.pnl > 0).length;
+      return {
+        label,
+        count: group.length,
+        pnl: round(group.reduce((s, t) => s + Number(t.pnl), 0)),
+        winRate: round((wins / group.length) * 100, 1),
+      };
+    })
+    .sort((a, b) => b.pnl - a.pnl);
+}
+
+function breakdownByMultiLabel(
+  trades: Trade[],
+  getLabels: (t: Trade) => string[],
+  unsetLabel = "Unassigned"
+): BreakdownItem[] {
+  const groups = new Map<string, Trade[]>();
+  for (const t of trades) {
+    const labels = getLabels(t).map((l) => l.trim()).filter(Boolean);
+    const keys = labels.length > 0 ? labels : [unsetLabel];
+    for (const label of keys) {
+      const list = groups.get(label) ?? [];
+      list.push(t);
+      groups.set(label, list);
+    }
   }
 
   return [...groups.entries()]
@@ -176,12 +206,63 @@ export function breakdownBySymbol(trades: Trade[]): BreakdownItem[] {
   return breakdownByField(trades, (t) => t.symbol);
 }
 
-export function breakdownBySetup(trades: Trade[]): BreakdownItem[] {
-  return breakdownByField(trades, (t) => t.setup_tag);
+export function breakdownByStrategy(trades: Trade[]): BreakdownItem[] {
+  return breakdownByField(trades, (t) => {
+    if (t.trading_strategies?.name) return t.trading_strategies.name;
+    if (t.strategy_id && t.setup_tag) return t.setup_tag;
+    return null;
+  });
 }
 
+export function breakdownByAccount(trades: Trade[]): BreakdownItem[] {
+  return breakdownByField(trades, (t) => t.trading_accounts?.name ?? null);
+}
+
+export function breakdownByTags(trades: Trade[]): BreakdownItem[] {
+  return breakdownByMultiLabel(
+    trades,
+    (t) => (t.trade_tags ?? []).map((row) => row.tag),
+    "Untagged"
+  );
+}
+
+export function breakdownByDirection(trades: Trade[]): BreakdownItem[] {
+  return breakdownByField(trades, (t) =>
+    t.direction === "long" ? "Long" : t.direction === "short" ? "Short" : null
+  );
+}
+
+const SOURCE_LABELS: Record<string, string> = {
+  manual: "Manual",
+  csv: "CSV import",
+  tradovate: "Tradovate",
+  ninjatrader: "NinjaTrader",
+  tradingview: "TradingView",
+  other: "Other",
+};
+
+export function breakdownBySource(trades: Trade[]): BreakdownItem[] {
+  return breakdownByField(trades, (t) => SOURCE_LABELS[t.source] ?? t.source);
+}
+
+const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  eval: "Eval",
+  funded: "Funded",
+  personal: "Personal",
+};
+
 export function breakdownByAccountType(trades: Trade[]): BreakdownItem[] {
-  return breakdownByField(trades, (t) => t.account_type);
+  return breakdownByField(trades, (t) =>
+    t.account_type ? ACCOUNT_TYPE_LABELS[t.account_type] ?? t.account_type : null
+  );
+}
+
+export function breakdownByRuleFollowed(trades: Trade[]): BreakdownItem[] {
+  return breakdownByField(trades, (t) => {
+    if (t.rule_followed === true) return "Rules followed";
+    if (t.rule_followed === false) return "Rules broken";
+    return "Not tracked";
+  }, "Not tracked");
 }
 
 export function formatCurrency(n: number) {
