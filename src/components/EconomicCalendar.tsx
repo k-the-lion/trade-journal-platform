@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FilterPanel } from "@/components/FilterPanel";
 import { CATEGORY_LABELS } from "@/lib/economic-calendar/categories";
 import type { EconomicEvent, EventCategory, EventImpact } from "@/lib/economic-calendar/types";
 import {
@@ -231,6 +232,21 @@ export function EconomicCalendar() {
     }
   }
 
+  function clearCalendarFilters() {
+    setImpacts(["high"]);
+    setCountries(["US"]);
+  }
+
+  const calendarFiltersActive =
+    impacts.length !== 1 ||
+    impacts[0] !== "high" ||
+    countries.length !== 1 ||
+    countries[0] !== "US";
+
+  const calendarFilterHint = `${impacts.map((i) => IMPACT_META[i].label).join(", ")} impact · ${
+    countries.length === 0 ? "All countries" : countries.join(", ")
+  }`;
+
   return (
     <div className="space-y-5">
       {nextEvent && (
@@ -284,7 +300,12 @@ export function EconomicCalendar() {
           </button>
         </div>
 
-        <div className="space-y-3">
+        <FilterPanel
+          nested
+          hint={calendarFilterHint}
+          active={calendarFiltersActive}
+          onClear={clearCalendarFilters}
+        >
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -377,7 +398,7 @@ export function EconomicCalendar() {
               })}
             </div>
           </div>
-        </div>
+        </FilterPanel>
 
         {error && (
           <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-danger">

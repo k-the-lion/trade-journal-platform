@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { StatCard } from "@/components/StatCard";
+import { FilterPanel } from "@/components/FilterPanel";
 import {
   EquityCurveChart,
   BreakdownChart,
@@ -97,27 +98,15 @@ export function ReportsView({
         <p className="text-muted text-sm mt-1">Performance analytics from your logged trades</p>
       </div>
 
-      <div className="card p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-medium text-sm">Filters</h2>
-            <p className="text-xs text-muted mt-0.5">
-              {filtersActive
-                ? `Showing ${filteredTrades.length} of ${trades.length} trades`
-                : "All trades included — narrow by account, strategy, or tag"}
-            </p>
-          </div>
-          {filtersActive && (
-            <button
-              type="button"
-              className="text-xs text-primary hover:underline"
-              onClick={clearFilters}
-            >
-              Clear all filters
-            </button>
-          )}
-        </div>
-
+      <FilterPanel
+        hint={
+          filtersActive
+            ? `Showing ${filteredTrades.length} of ${trades.length} trades`
+            : "All trades included — narrow by account, strategy, or tag"
+        }
+        active={filtersActive}
+        onClear={clearFilters}
+      >
         <div>
           <p className="text-xs text-muted mb-2">Account</p>
           <div className="flex flex-wrap gap-2">
@@ -225,7 +214,7 @@ export function ReportsView({
             )}
           </div>
         </div>
-      </div>
+      </FilterPanel>
 
       {filteredTrades.length === 0 ? (
         <div className="card p-8 text-center text-muted text-sm">

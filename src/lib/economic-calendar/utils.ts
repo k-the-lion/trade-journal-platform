@@ -85,6 +85,18 @@ export function formatDayHeading(dateKey: string): string {
   });
 }
 
+export function isValidDateKey(value: string | undefined): value is string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const d = new Date(`${value}T12:00:00`);
+  return !Number.isNaN(d.getTime());
+}
+
+export function shiftDateKey(dateKey: string, days: number): string {
+  const d = new Date(`${dateKey}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return toDateKey(d);
+}
+
 export function gridFetchRange(cells: CalendarCell[]): { from: string; to: string } {
   if (!cells.length) {
     const today = new Date();

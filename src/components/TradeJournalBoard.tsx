@@ -15,6 +15,8 @@ import { moodEmoji, moodLabel } from "@/lib/constants/trade-meta";
 import { computeTradeStats, formatCurrency } from "@/lib/reports/stats";
 import { isAllowedChartLink, normalizeChartLink } from "@/lib/screenshots";
 import { MoodPicker } from "@/components/MoodPicker";
+import { AccountManager } from "@/components/AccountManager";
+import { FilterPanel } from "@/components/FilterPanel";
 import { DeleteAllTradesPanel } from "@/components/DeleteAllTradesPanel";
 import { DeleteTradeButton } from "@/components/DeleteTradeButton";
 import { StatCard } from "@/components/StatCard";
@@ -48,6 +50,7 @@ export function TradeJournalBoard({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showAccountForm, setShowAccountForm] = useState(false);
+  const [showAccountManager, setShowAccountManager] = useState(false);
   const [selectedTradeIds, setSelectedTradeIds] = useState<string[]>([]);
   const [bulkStrategy, setBulkStrategy] = useState("");
   const [pending, startTransition] = useTransition();
@@ -339,34 +342,24 @@ export function TradeJournalBoard({
         <StatCard label="Rule adherence" value={`${stats.ruleFollowedPct}%`} />
       </div>
 
-      <div className="card p-4 space-y-4">
-        <div className="flex flex-wrap items-center gap-3 justify-between">
-          <div>
-            <h2 className="font-medium text-sm">Filters</h2>
-            <p className="text-xs text-muted mt-0.5">
-              Narrow by account, outcome, strategy, tags, or symbol
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {hasActiveFilters && (
-              <button
-                type="button"
-                className="text-xs text-primary hover:underline"
-                onClick={clearAllFilters}
-              >
-                Clear all filters
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-secondary text-xs py-1.5 px-3"
-              onClick={() => setShowAccountForm((v) => !v)}
-            >
-              {showAccountForm ? "Cancel" : "+ Add account"}
-            </button>
-          </div>
-        </div>
-
+      <FilterPanel
+        hint={
+          hasActiveFilters
+            ? `Showing ${filtered.length} of ${trades.length} trades`
+            : "Narrow by account, outcome, strategy, tags, or symbol"
+        }
+        active={hasActiveFilters}
+        onClear={clearAllFilters}
+        actions={
+          <button
+            type="button"
+            className="btn btn-secondary text-xs py-1.5 px-3"
+            onClick={() => setShowAccountForm((v) => !v)}
+          >
+            {showAccountForm ? "Cancel" : "+ Add account"}
+          </button>
+        }
+      >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div>
             <p className="text-xs text-muted mb-2">Outcome</p>
@@ -406,7 +399,18 @@ export function TradeJournalBoard({
         </div>
 
         <div>
-          <p className="text-xs text-muted mb-2">Accounts</p>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <p className="text-xs text-muted">Accounts</p>
+            {accounts.length > 0 && (
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline"
+                onClick={() => setShowAccountManager((v) => !v)}
+              >
+                {showAccountManager ? "Hide" : "Manage / rename"}
+              </button>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2">
             {accounts.length === 0 ? (
               <p className="text-sm text-muted">No accounts yet.</p>
@@ -428,6 +432,14 @@ export function TradeJournalBoard({
               ))
             )}
           </div>
+          {showAccountManager && accounts.length > 0 && (
+            <div className="mt-3">
+              <AccountManager
+                accounts={accounts}
+                onAccountsChange={setAccounts}
+              />
+            </div>
+          )}
         </div>
 
         {strategies.length > 0 && (
@@ -502,7 +514,7 @@ export function TradeJournalBoard({
             </div>
           </form>
         )}
-      </div>
+      </FilterPanel>
 
       <div className="card overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex flex-wrap gap-3 justify-between items-center">

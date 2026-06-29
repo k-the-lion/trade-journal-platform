@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getProfile } from "@/lib/supabase/server";
 import { getDashboardData } from "@/lib/dashboard/data";
 import { TradeJournalBoard } from "@/components/TradeJournalBoard";
@@ -9,13 +10,18 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold">
-          Welcome{profile?.full_name ? `, ${profile.full_name}` : ""}
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Journal your trades, track strategies, and review performance by account
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">
+            Welcome{profile?.full_name ? `, ${profile.full_name}` : ""}
+          </h1>
+          <p className="text-muted text-sm mt-1">
+            Journal your trades, track strategies, and review performance by account
+          </p>
+        </div>
+        <Link href="/journal" className="btn btn-primary text-sm shrink-0">
+          Daily journal
+        </Link>
       </div>
 
       <TradeJournalBoard

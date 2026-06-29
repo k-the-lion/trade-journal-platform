@@ -90,6 +90,21 @@ export interface TradingTagPreset {
   created_at: string;
 }
 
+export interface DailyJournalEntry {
+  id: string;
+  user_id: string;
+  journal_date: string;
+  mood: string | null;
+  day_summary: string | null;
+  went_well: string | null;
+  to_improve: string | null;
+  lessons_learned: string | null;
+  tomorrow_focus: string | null;
+  discipline_rating: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TradingStrategy {
   id: string;
   user_id: string;
@@ -263,6 +278,11 @@ export interface Database {
         TradingTagPreset,
         Partial<TradingTagPreset> & { user_id: string; name: string },
         Partial<TradingTagPreset>
+      >;
+      daily_journal_entries: TableDef<
+        DailyJournalEntry,
+        Partial<DailyJournalEntry> & { user_id: string; journal_date: string },
+        Partial<DailyJournalEntry>
       >;
       import_jobs: TableDef<ImportJob, Partial<ImportJob> & { user_id: string; source: ImportSource }, Partial<ImportJob>>;
       broker_sync_connections: TableDef<

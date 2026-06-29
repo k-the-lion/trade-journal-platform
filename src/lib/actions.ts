@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient, getProfile } from "@/lib/supabase/server";
-import type { AccountType, TradeInput, TradingStrategy, TradingTagPreset } from "@/lib/types/database";
+import type { AccountType, DailyJournalEntry, TradeInput, TradingStrategy, TradingTagPreset } from "@/lib/types/database";
 import { permanentlyDeleteTradesForUser } from "@/lib/trades/delete";
 import { BUCKET, tradeScreenshotPath } from "@/lib/supabase/storage";
 import { isAllowedChartLink, normalizeChartLink } from "@/lib/screenshots";
@@ -58,7 +58,112 @@ export async function createTradingAccount(data: {
   if (error) throw new Error(error.message);
   revalidatePath("/dashboard");
   revalidatePath("/import");
+  revalidatePath("/reports");
+  revalidatePath("/trades");
   return account;
+}
+
+export async function updateTradingAccount(
+  id: string,
+  data: {
+    name?: string;
+    broker?: string | null;
+    account_type?: AccountType | null;
+    is_default?: boolean;
+  }
+) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const updates: Record<string, unknown> = {};
+  if (data.name !== undefined) {
+    const trimmed = data.name.trim();
+    if (!trimmed) throw new Error("Account name is required");
+    updates.name = trimmed;
+  }
+  if (data.broker !== undefined) {
+    updates.broker = data.broker?.trim() || null;
+  }
+  if (data.account_type !== undefined) {
+    updates.account_type = data.account_type;
+  }
+  if (data.is_default !== undefined) {
+    updates.is_default = data.is_default;
+  }
+
+  if (data.is_default) {
+    await supabase
+      .from("trading_accounts")
+      .update({ is_default: false })
+      .eq("user_id", profile.id);
+  }
+
+  const { data: account, error } = await supabase
+    .from("trading_accounts")
+    .update(updates)
+    .eq("id", id)
+    .eq("user_id", profile.id)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/import");
+  revalidatePath("/reports");
+  revalidatePath("/trades");
+
+  return account;
+}
+
+export async function upsertDailyJournalEntry(data: {
+  journal_date: string;
+  mood?: string | null;
+  day_summary?: string | null;
+  went_well?: string | null;
+  to_improve?: string | null;
+  lessons_learned?: string | null;
+  tomorrow_focus?: string | null;
+  discipline_rating?: number | null;
+}) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data.journal_date)) {
+    throw new Error("Invalid journal date");
+  }
+
+  const trim = (value: string | null | undefined) => value?.trim() || null;
+
+  const payload = {
+    user_id: profile.id,
+    journal_date: data.journal_date,
+    mood: trim(data.mood),
+    day_summary: trim(data.day_summary),
+    went_well: trim(data.went_well),
+    to_improve: trim(data.to_improve),
+    lessons_learned: trim(data.lessons_learned),
+    tomorrow_focus: trim(data.tomorrow_focus),
+    discipline_rating:
+      data.discipline_rating != null && data.discipline_rating >= 1 && data.discipline_rating <= 5
+        ? data.discipline_rating
+        : null,
+  };
+
+  const { data: entry, error } = await supabase
+    .from("daily_journal_entries")
+    .upsert(payload, { onConflict: "user_id,journal_date" })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/journal");
+  revalidatePath("/dashboard");
+
+  return entry as DailyJournalEntry;
 }
 
 export async function createStrategy(data: {
