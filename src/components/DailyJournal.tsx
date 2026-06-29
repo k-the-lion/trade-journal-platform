@@ -33,11 +33,13 @@ export function DailyJournal({
   entry,
   recentEntries,
   trades,
+  journalUnavailable = false,
 }: {
   journalDate: string;
   entry: DailyJournalEntry | null;
   recentEntries: DailyJournalEntry[];
   trades: Trade[];
+  journalUnavailable?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -79,11 +81,17 @@ export function DailyJournal({
   }
 
   function handleSave() {
+    if (journalUnavailable) {
+      setError(
+        "Daily journal database table is missing. Run migration 014 in Supabase SQL editor, then refresh."
+      );
+      return;
+    }
     setError(null);
     setSaved(false);
     startTransition(async () => {
       try {
-        await upsertDailyJournalEntry({
+        const result = await upsertDailyJournalEntry({
           journal_date: journalDate,
           mood: mood || null,
           day_summary: daySummary,
@@ -93,10 +101,14 @@ export function DailyJournal({
           tomorrow_focus: tomorrowFocus,
           discipline_rating: disciplineRating,
         });
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
         setSaved(true);
         router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to save");
+      } catch {
+        setError("Failed to save. If this persists, run migration 014 in Supabase.");
       }
     });
   }
@@ -280,7 +292,7 @@ export function DailyJournal({
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={pending}
+                disabled={pending || journalUnavailable}
                 onClick={handleSave}
               >
                 {pending ? "Saving…" : "Save journal"}

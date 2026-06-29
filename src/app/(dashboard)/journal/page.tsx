@@ -15,6 +15,13 @@ function entryHasContent(entry: DailyJournalEntry): boolean {
   );
 }
 
+function isJournalTableMissing(error: { code?: string; message?: string } | null) {
+  return (
+    error?.code === "PGRST205" ||
+    error?.message?.includes("daily_journal_entries") === true
+  );
+}
+
 export default async function JournalPage({
   searchParams,
 }: {
@@ -26,7 +33,7 @@ export default async function JournalPage({
   const profile = await getProfile();
   const supabase = await createClient();
 
-  const [{ data: entry }, { data: recent }, { data: trades }] = await Promise.all([
+  const [entryRes, recentRes, tradesRes] = await Promise.all([
     supabase
       .from("daily_journal_entries")
       .select("*")
@@ -46,7 +53,12 @@ export default async function JournalPage({
       .order("traded_at", { ascending: false }),
   ]);
 
-  const recentEntries = ((recent ?? []) as DailyJournalEntry[]).filter(entryHasContent);
+  const journalUnavailable =
+    isJournalTableMissing(entryRes.error) || isJournalTableMissing(recentRes.error);
+
+  const recentEntries = ((recentRes.data ?? []) as DailyJournalEntry[]).filter(
+    entryHasContent
+  );
 
   return (
     <div className="space-y-6">
@@ -57,11 +69,32 @@ export default async function JournalPage({
         </p>
       </div>
 
+      {journalUnavailable && (
+        <div className="card p-4 border-warning/40 bg-warning/10 text-sm space-y-2">
+          <p className="font-medium text-warning">Database setup required</p>
+          <p className="text-muted">
+            The daily journal table hasn&apos;t been created in Supabase yet. Open the{" "}
+            <a
+              href="https://supabase.com/dashboard/project/iikrkjmlokpsqcutulux/sql/new"
+              className="text-primary hover:underline"
+              target="_blank"
+              rel="noreferrer"
+            >
+              SQL editor
+            </a>
+            , paste the contents of{" "}
+            <code className="text-xs">supabase/migrations/014_daily_journal_entries.sql</code>
+            , and run it. Then refresh this page.
+          </p>
+        </div>
+      )}
+
       <DailyJournal
         journalDate={journalDate}
-        entry={(entry as DailyJournalEntry | null) ?? null}
+        entry={(entryRes.data as DailyJournalEntry | null) ?? null}
         recentEntries={recentEntries}
-        trades={(trades ?? []) as Trade[]}
+        trades={(tradesRes.data ?? []) as Trade[]}
+        journalUnavailable={journalUnavailable}
       />
     </div>
   );

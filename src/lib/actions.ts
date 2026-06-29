@@ -158,12 +158,24 @@ export async function upsertDailyJournalEntry(data: {
     .select()
     .single();
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (
+      error.code === "PGRST205" ||
+      error.message.includes("daily_journal_entries")
+    ) {
+      return {
+        ok: false as const,
+        error:
+          "Daily journal database table is missing. Run migration 014 in the Supabase SQL editor (see supabase/migrations/014_daily_journal_entries.sql), then try again.",
+      };
+    }
+    return { ok: false as const, error: error.message };
+  }
 
   revalidatePath("/journal");
   revalidatePath("/dashboard");
 
-  return entry as DailyJournalEntry;
+  return { ok: true as const, entry: entry as DailyJournalEntry };
 }
 
 export async function createStrategy(data: {
