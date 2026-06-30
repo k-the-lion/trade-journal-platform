@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient, getProfile } from "@/lib/supabase/server";
+import { getDashboardData } from "@/lib/dashboard/data";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ChatSessionSidebar } from "@/components/ChatSessionSidebar";
 import { openChatSession } from "@/lib/actions";
@@ -34,18 +35,20 @@ export default async function ChatPage({
 
   const activeSession = session;
 
-  const { data: messages } = await supabase
-    .from("chat_messages")
-    .select("*")
-    .eq("session_id", activeSession.id)
-    .order("created_at", { ascending: true });
-
-  const { data: allSessions } = await supabase
-    .from("chat_sessions")
-    .select("*, chat_messages(count)")
-    .eq("user_id", profile.id)
-    .order("updated_at", { ascending: false })
-    .limit(30);
+  const [{ data: messages }, { data: allSessions }, dashboard] = await Promise.all([
+    supabase
+      .from("chat_messages")
+      .select("*")
+      .eq("session_id", activeSession.id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("chat_sessions")
+      .select("*, chat_messages(count)")
+      .eq("user_id", profile.id)
+      .order("updated_at", { ascending: false })
+      .limit(30),
+    getDashboardData(profile.id),
+  ]);
 
   const sessionsList = ((allSessions ?? []) as (ChatSession & {
     chat_messages: { count: number }[];
@@ -61,7 +64,8 @@ export default async function ChatPage({
       <div>
         <h1 className="text-2xl font-semibold">AI Coach</h1>
         <p className="text-muted text-sm mt-1">
-          Coaching based on your trades and your coach&apos;s playbook rules
+          Coaching grounded in your trades, daily journals, strategies, tags, notes, and chart
+          links — filter the context before you ask.
         </p>
       </div>
 
@@ -70,10 +74,14 @@ export default async function ChatPage({
           sessions={sessionsList}
           activeSessionId={activeSession.id}
         />
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <ChatPanel
             session={activeSession}
             initialMessages={(messages ?? []) as ChatMessage[]}
+            accounts={dashboard.accounts}
+            strategies={dashboard.strategies}
+            tagPresets={dashboard.tagPresets}
+            trades={dashboard.trades}
           />
         </div>
       </div>

@@ -2,21 +2,43 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { ChatMessage, ChatSession } from "@/lib/types/database";
+import { ChatCoachFilters } from "@/components/ChatCoachFilters";
 import { ChatMarkdown } from "@/components/ChatMarkdown";
+import type { CoachTradeFilters } from "@/lib/ai/coach-filters";
+import type {
+  ChatMessage,
+  ChatSession,
+  Trade,
+  TradingAccount,
+  TradingStrategy,
+  TradingTagPreset,
+} from "@/lib/types/database";
 
 export function ChatPanel({
   session,
   initialMessages,
+  accounts,
+  strategies,
+  tagPresets,
+  trades,
 }: {
   session: ChatSession;
   initialMessages: ChatMessage[];
+  accounts: TradingAccount[];
+  strategies: TradingStrategy[];
+  tagPresets: TradingTagPreset[];
+  trades: Trade[];
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
   const [sessionTitle, setSessionTitle] = useState(session.title);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState<CoachTradeFilters>({
+    accountIds: [],
+    strategyIds: [],
+    tagNames: [],
+  });
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,7 +67,11 @@ export function ChatPanel({
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id, message: userMsg }),
+        body: JSON.stringify({
+          sessionId: session.id,
+          message: userMsg,
+          filters,
+        }),
       });
       const raw = await res.text();
       let data: {
@@ -108,18 +134,30 @@ export function ChatPanel({
   }
 
   return (
-    <div className="card flex flex-col h-[calc(100vh-12rem)] max-w-3xl">
-      <div className="px-4 py-3 border-b border-border">
-        <h2 className="font-medium">{sessionTitle}</h2>
-        <p className="text-xs text-muted mt-0.5">
-          Educational coaching only — not financial advice.
-        </p>
+    <div className="card flex flex-col h-[calc(100vh-12rem)]">
+      <div className="px-4 py-3 border-b border-border space-y-3">
+        <div>
+          <h2 className="font-medium">{sessionTitle}</h2>
+          <p className="text-xs text-muted mt-0.5">
+            Educational coaching only — not financial advice. Coach sees your trades, daily
+            journals, tags, notes, and screenshot links for the filtered scope.
+          </p>
+        </div>
+        <ChatCoachFilters
+          filters={filters}
+          onChange={setFilters}
+          accounts={accounts}
+          strategies={strategies}
+          tagPresets={tagPresets}
+          trades={trades}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <p className="text-sm text-muted text-center py-8">
-            Ask about your recent trades, rule adherence, or performance patterns.
+            Ask about your trades, daily journal, rule adherence, or performance. Set filters above
+            to focus on an account, strategy, or tag.
           </p>
         )}
         {messages.map((msg) => (
@@ -154,7 +192,7 @@ export function ChatPanel({
           className="input flex-1"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="How did I perform this week?"
+          placeholder="How did my funded account perform this week?"
           disabled={loading}
         />
         <button type="submit" className="btn btn-primary shrink-0" disabled={loading}>

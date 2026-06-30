@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { buildSystemPrompt } from "@/lib/ai/context";
+import type { CoachTradeFilters } from "@/lib/ai/coach-filters";
+import { loadCoachData } from "@/lib/ai/load-coach-data";
 import { normalizeChatMessages } from "@/lib/ai/messages";
 import { isDefaultChatTitle, titleFromMessage } from "@/lib/ai/title";
-import type { CoachingPlaybook, Trade } from "@/lib/types/database";
+import type { CoachingPlaybook } from "@/lib/types/database";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -64,7 +66,17 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { sessionId, message } = body as { sessionId: string; message: string };
+    const { sessionId, message, filters: rawFilters } = body as {
+      sessionId: string;
+      message: string;
+      filters?: CoachTradeFilters;
+    };
+
+    const filters: CoachTradeFilters = {
+      accountIds: rawFilters?.accountIds ?? [],
+      strategyIds: rawFilters?.strategyIds ?? [],
+      tagNames: rawFilters?.tagNames ?? [],
+    };
 
     if (!sessionId || !message?.trim()) {
       return NextResponse.json({ error: "Missing sessionId or message" }, { status: 400 });
@@ -100,12 +112,7 @@ export async function POST(request: Request) {
         .eq("id", activeSessionId);
     }
 
-    const { data: trades } = await supabase
-      .from("trades")
-      .select("*, trade_tags(tag)")
-      .eq("user_id", profile.id)
-      .order("traded_at", { ascending: false })
-      .limit(100);
+    const coachData = await loadCoachData(supabase, profile.id, filters);
 
     let playbook: CoachingPlaybook | null = null;
 
@@ -150,7 +157,11 @@ export async function POST(request: Request) {
     const systemPrompt = buildSystemPrompt(
       profile,
       playbook ?? defaultPlaybook,
-      (trades ?? []) as Trade[]
+      coachData.filteredTrades,
+      coachData.dailyJournals,
+      filters,
+      coachData.accounts,
+      coachData.strategies
     );
 
     const { data: history } = await supabase
@@ -181,18 +192,32 @@ export async function POST(request: Request) {
         "AI coaching is not configured yet. Add ANTHROPIC_API_KEY to your environment. " +
         "Based on your logged trades, focus on reviewing your recent P&L patterns and rule adherence.";
     } else {
-      const response = await anthropic.messages.create({
-        model: MODEL,
-        max_tokens: 800,
-        system: systemPrompt,
-        messages: chatMessages,
-      });
+      try {
+        const response = await anthropic.messages.create({
+          model: MODEL,
+          max_tokens: 800,
+          system: systemPrompt,
+          messages: chatMessages,
+        });
 
-      const textBlock = response.content.find((b) => b.type === "text");
-      assistantContent =
-        textBlock && "text" in textBlock
-          ? textBlock.text
-          : "I couldn't generate a response. Please try again.";
+        const textBlock = response.content.find((b) => b.type === "text");
+        assistantContent =
+          textBlock && "text" in textBlock
+            ? textBlock.text
+            : "I couldn't generate a response. Please try again.";
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.includes("authentication_error") || message.includes("x-api-key")) {
+          return NextResponse.json(
+            {
+              error:
+                "AI coach API key is invalid or missing. Check ANTHROPIC_API_KEY in your environment.",
+            },
+            { status: 503 }
+          );
+        }
+        throw err;
+      }
     }
 
     await supabase.from("chat_messages").insert({
