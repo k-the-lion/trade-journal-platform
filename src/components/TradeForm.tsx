@@ -170,7 +170,7 @@ export function TradeForm({
             ))}
           </select>
           {strategyOptions.length === 0 && (
-            <Link href="/strategies" className="text-xs text-primary hover:underline mt-1 inline-block">
+            <Link href="/settings?tab=strategies" className="text-xs text-primary hover:underline mt-1 inline-block">
               Create strategies →
             </Link>
           )}

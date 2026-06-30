@@ -60,6 +60,7 @@ export async function createTradingAccount(data: {
   revalidatePath("/import");
   revalidatePath("/reports");
   revalidatePath("/trades");
+  revalidatePath("/settings");
   return account;
 }
 
@@ -113,6 +114,7 @@ export async function updateTradingAccount(
   revalidatePath("/import");
   revalidatePath("/reports");
   revalidatePath("/trades");
+  revalidatePath("/settings");
 
   return account;
 }
@@ -199,6 +201,8 @@ export async function createStrategy(data: {
     .single();
 
   if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
   return strategy as TradingStrategy;
 }
 
@@ -233,6 +237,8 @@ export async function updateStrategy(
       .eq("strategy_id", id);
   }
 
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
   return strategy as TradingStrategy;
 }
 
@@ -248,6 +254,8 @@ export async function deleteStrategy(id: string) {
     .eq("user_id", profile.id);
 
   if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
 }
 
 export async function seedStrategyTemplates() {
@@ -276,6 +284,8 @@ export async function seedStrategyTemplates() {
     if (error) throw new Error(error.message);
   }
 
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
   return { added: toInsert.length };
 }
 
@@ -303,6 +313,7 @@ export async function createTagPreset(name: string) {
     .single();
 
   if (error) throw new Error(error.message);
+  revalidatePath("/settings");
   revalidatePath("/strategies");
   revalidatePath("/dashboard");
   return data as TradingTagPreset;
@@ -320,6 +331,7 @@ export async function deleteTagPreset(id: string) {
     .eq("user_id", profile.id);
 
   if (error) throw new Error(error.message);
+  revalidatePath("/settings");
   revalidatePath("/strategies");
   revalidatePath("/dashboard");
 }
@@ -951,4 +963,181 @@ export async function createChatSession(title?: string) {
 
   if (error) throw new Error(error.message);
   return data;
+}
+
+export async function updateProfileName(fullName: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const name = fullName.trim();
+  if (!name) throw new Error("Name is required");
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({ full_name: name })
+    .eq("id", profile.id);
+
+  if (error) throw new Error(error.message);
+
+  await supabase.auth.updateUser({ data: { full_name: name } });
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  return { ok: true as const };
+}
+
+export async function updateAccountEmail(newEmail: string) {
+  const supabase = await createClient();
+  const email = newEmail.trim().toLowerCase();
+  if (!email || !email.includes("@")) throw new Error("Enter a valid email address");
+
+  const { error } = await supabase.auth.updateUser({ email });
+  if (error) throw new Error(error.message);
+
+  return {
+    ok: true as const,
+    message: "Confirmation sent — check your inbox (old and new address) to finish the change.",
+  };
+}
+
+export async function updateAccountPassword(newPassword: string) {
+  if (newPassword.length < 8) {
+    throw new Error("Password must be at least 8 characters");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+
+  return { ok: true as const };
+}
+
+export async function createUserCoachPlaybook(data: {
+  name: string;
+  tone?: string;
+  topics_to_emphasize?: string[];
+  topics_to_avoid?: string[];
+  custom_rules?: string;
+  review_checklist?: string;
+  is_default?: boolean;
+}) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const name = data.name.trim();
+  if (!name) throw new Error("Playbook name is required");
+
+  if (data.is_default) {
+    await supabase
+      .from("user_coach_playbooks")
+      .update({ is_default: false })
+      .eq("user_id", profile.id);
+  }
+
+  const { data: row, error } = await supabase
+    .from("user_coach_playbooks")
+    .insert({
+      user_id: profile.id,
+      name,
+      tone: data.tone ?? "supportive",
+      topics_to_emphasize: data.topics_to_emphasize ?? ["risk management", "rule adherence"],
+      topics_to_avoid: data.topics_to_avoid ?? ["specific trade calls"],
+      custom_rules: data.custom_rules ?? "",
+      review_checklist: data.review_checklist ?? "",
+      is_default: data.is_default ?? false,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (error.message.includes("user_coach_playbooks")) {
+      throw new Error(
+        "Playbooks table is missing. Run migration 015 in Supabase (see supabase/migrations/015_user_coach_playbooks.sql)."
+      );
+    }
+    throw new Error(error.message);
+  }
+
+  revalidatePath("/settings");
+  revalidatePath("/chat");
+  return row;
+}
+
+export async function updateUserCoachPlaybook(
+  id: string,
+  data: {
+    name?: string;
+    tone?: string;
+    topics_to_emphasize?: string[];
+    topics_to_avoid?: string[];
+    custom_rules?: string;
+    review_checklist?: string;
+    is_default?: boolean;
+  }
+) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  if (data.is_default) {
+    await supabase
+      .from("user_coach_playbooks")
+      .update({ is_default: false })
+      .eq("user_id", profile.id);
+  }
+
+  const { error } = await supabase
+    .from("user_coach_playbooks")
+    .update(data)
+    .eq("id", id)
+    .eq("user_id", profile.id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  revalidatePath("/chat");
+}
+
+export async function deleteUserCoachPlaybook(id: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("user_coach_playbooks")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", profile.id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  revalidatePath("/chat");
+}
+
+export async function updateChatSessionPlaybook(sessionId: string, playbookKey: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const key = playbookKey.trim();
+  if (!key) throw new Error("Invalid playbook");
+
+  if (key !== "auto" && key !== "default" && key !== "org") {
+    const { data: owned } = await supabase
+      .from("user_coach_playbooks")
+      .select("id")
+      .eq("id", key)
+      .eq("user_id", profile.id)
+      .maybeSingle();
+    if (!owned) throw new Error("Playbook not found");
+  }
+
+  const { error } = await supabase
+    .from("chat_sessions")
+    .update({ playbook_key: key, updated_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .eq("user_id", profile.id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/chat");
 }

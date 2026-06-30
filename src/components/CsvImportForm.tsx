@@ -242,7 +242,10 @@ export function CsvImportForm({
           <div>
             <h2 className="font-medium text-sm">Trading account</h2>
             <p className="text-xs text-muted mt-0.5">
-              Every import is assigned to an account so you can filter on the dashboard.
+              Every import is assigned to an account so you can filter on the dashboard.{" "}
+              <Link href="/settings?tab=accounts" className="text-primary hover:underline">
+                Manage accounts
+              </Link>
             </p>
           </div>
           {accountOptions.length > 0 && (
@@ -343,7 +346,7 @@ export function CsvImportForm({
         </select>
         <p className="text-xs text-muted mt-1">
           Applies this strategy (and its rules) to every trade in this import.{" "}
-          <Link href="/strategies" className="text-primary hover:underline">
+          <Link href="/settings?tab=strategies" className="text-primary hover:underline">
             Manage strategies
           </Link>
         </p>

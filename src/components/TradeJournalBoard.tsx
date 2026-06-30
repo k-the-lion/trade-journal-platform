@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition, useEffect, useRef, useCallback } from
 import Link from "next/link";
 import {
   bulkAssignStrategy,
-  createTradingAccount,
   addTradeScreenshotLink,
   deleteTradeScreenshot,
   updateTradeJournal,
@@ -15,7 +14,6 @@ import { moodEmoji, moodLabel } from "@/lib/constants/trade-meta";
 import { computeTradeStats, formatCurrency } from "@/lib/reports/stats";
 import { isAllowedChartLink, normalizeChartLink } from "@/lib/screenshots";
 import { MoodPicker } from "@/components/MoodPicker";
-import { AccountManager } from "@/components/AccountManager";
 import { FilterPanel } from "@/components/FilterPanel";
 import { DeleteAllTradesPanel } from "@/components/DeleteAllTradesPanel";
 import { DeleteTradeButton } from "@/components/DeleteTradeButton";
@@ -49,8 +47,6 @@ export function TradeJournalBoard({
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [showAccountForm, setShowAccountForm] = useState(false);
-  const [showAccountManager, setShowAccountManager] = useState(false);
   const [selectedTradeIds, setSelectedTradeIds] = useState<string[]>([]);
   const [bulkStrategy, setBulkStrategy] = useState("");
   const [pending, startTransition] = useTransition();
@@ -255,24 +251,6 @@ export function TradeJournalBoard({
     });
   }
 
-  async function handleCreateAccount(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const account = await createTradingAccount({
-      name: String(fd.get("name")),
-      broker: String(fd.get("broker") || "") || null,
-      account_type: (String(fd.get("account_type") || "") || null) as
-        | "eval"
-        | "funded"
-        | "personal"
-        | null,
-      is_default: fd.get("is_default") === "on",
-    });
-    setAccounts((prev) => [...prev, account]);
-    setShowAccountForm(false);
-    e.currentTarget.reset();
-  }
-
   async function handleDeleteTrade(tradeId: string) {
     setTrades((prev) => prev.filter((t) => t.id !== tradeId));
     setSelectedTradeIds((prev) => prev.filter((id) => id !== tradeId));
@@ -350,15 +328,6 @@ export function TradeJournalBoard({
         }
         active={hasActiveFilters}
         onClear={clearAllFilters}
-        actions={
-          <button
-            type="button"
-            className="btn btn-secondary text-xs py-1.5 px-3"
-            onClick={() => setShowAccountForm((v) => !v)}
-          >
-            {showAccountForm ? "Cancel" : "+ Add account"}
-          </button>
-        }
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div>
@@ -399,21 +368,20 @@ export function TradeJournalBoard({
         </div>
 
         <div>
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <p className="text-xs text-muted">Accounts</p>
-            {accounts.length > 0 && (
-              <button
-                type="button"
-                className="text-xs text-primary hover:underline"
-                onClick={() => setShowAccountManager((v) => !v)}
-              >
-                {showAccountManager ? "Hide" : "Manage / rename"}
-              </button>
-            )}
-          </div>
+          <p className="text-xs text-muted mb-2">Accounts</p>
           <div className="flex flex-wrap gap-2">
             {accounts.length === 0 ? (
-              <p className="text-sm text-muted">No accounts yet.</p>
+              <p className="text-sm text-muted">
+                No accounts yet.{" "}
+                <Link href="/settings?tab=accounts" className="text-primary hover:underline">
+                  Add in Settings
+                </Link>{" "}
+                or during{" "}
+                <Link href="/import" className="text-primary hover:underline">
+                  Import
+                </Link>
+                .
+              </p>
             ) : (
               accounts.map((acc) => (
                 <button
@@ -432,14 +400,6 @@ export function TradeJournalBoard({
               ))
             )}
           </div>
-          {showAccountManager && accounts.length > 0 && (
-            <div className="mt-3">
-              <AccountManager
-                accounts={accounts}
-                onAccountsChange={setAccounts}
-              />
-            </div>
-          )}
         </div>
 
         {strategies.length > 0 && (
@@ -486,34 +446,6 @@ export function TradeJournalBoard({
           </div>
         )}
 
-        {showAccountForm && (
-          <form
-            onSubmit={handleCreateAccount}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 rounded-lg border border-border/60 bg-background/40"
-          >
-            <input
-              name="name"
-              className="input"
-              placeholder="Account name"
-              required
-            />
-            <input name="broker" className="input" placeholder="Broker (optional)" />
-            <select name="account_type" className="input" defaultValue="">
-              <option value="">Type —</option>
-              <option value="eval">Eval</option>
-              <option value="funded">Funded</option>
-              <option value="personal">Personal</option>
-            </select>
-            <div className="flex items-center gap-3">
-              <label className="text-xs text-muted flex items-center gap-1.5">
-                <input type="checkbox" name="is_default" /> Default
-              </label>
-              <button type="submit" className="btn btn-primary text-xs py-1.5 px-3">
-                Save
-              </button>
-            </div>
-          </form>
-        )}
       </FilterPanel>
 
       <div className="card overflow-hidden">
@@ -571,7 +503,7 @@ export function TradeJournalBoard({
               ))}
             </select>
             {strategies.length === 0 && (
-              <Link href="/strategies" className="text-xs text-primary hover:underline">
+              <Link href="/settings?tab=strategies" className="text-xs text-primary hover:underline">
                 Create strategies first
               </Link>
             )}
@@ -894,7 +826,7 @@ function TradeJournalRow({
                 ))}
               </select>
               {strategies.length === 0 && (
-                <Link href="/strategies" className="text-xs text-primary hover:underline mt-1 inline-block">
+                <Link href="/settings?tab=strategies" className="text-xs text-primary hover:underline mt-1 inline-block">
                   Create strategies →
                 </Link>
               )}

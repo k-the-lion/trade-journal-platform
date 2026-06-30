@@ -198,10 +198,25 @@ export interface ImportJob {
   completed_at: string | null;
 }
 
+export interface UserCoachPlaybook {
+  id: string;
+  user_id: string;
+  name: string;
+  tone: string;
+  topics_to_emphasize: string[];
+  topics_to_avoid: string[];
+  custom_rules: string;
+  review_checklist: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ChatSession {
   id: string;
   user_id: string;
   org_id: string | null;
+  playbook_key: string;
   title: string;
   created_at: string;
   updated_at: string;
@@ -253,6 +268,11 @@ export interface Database {
       org_members: TableDef<OrgMember, Omit<OrgMember, "id" | "created_at">, Partial<OrgMember>>;
       org_invites: TableDef<OrgInvite, Omit<OrgInvite, "id" | "created_at" | "token">, Partial<OrgInvite>>;
       coaching_playbooks: TableDef<CoachingPlaybook, Partial<CoachingPlaybook>, Partial<CoachingPlaybook>>;
+      user_coach_playbooks: TableDef<
+        UserCoachPlaybook,
+        Partial<UserCoachPlaybook> & { user_id: string; name: string },
+        Partial<UserCoachPlaybook>
+      >;
       trades: TableDef<
         Trade,
         Partial<Trade> & { user_id: string; traded_at: string; symbol: string; direction: TradeDirection; pnl: number },

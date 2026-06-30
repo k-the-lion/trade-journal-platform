@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { updateTradingAccount } from "@/lib/actions";
+import { createTradingAccount, updateTradingAccount } from "@/lib/actions";
 import type { AccountType, TradingAccount } from "@/lib/types/database";
 
 const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
@@ -13,11 +13,20 @@ const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
 export function AccountManager({
   accounts,
   onAccountsChange,
+  showCreate = false,
+  variant = "embedded",
 }: {
   accounts: TradingAccount[];
   onAccountsChange: (accounts: TradingAccount[]) => void;
+  showCreate?: boolean;
+  variant?: "embedded" | "settings";
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newBroker, setNewBroker] = useState("");
+  const [newType, setNewType] = useState<AccountType | "">("");
+  const [newDefault, setNewDefault] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -53,49 +62,175 @@ export function AccountManager({
     });
   }
 
-  if (accounts.length === 0) return null;
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newName.trim()) {
+      setError("Account name is required");
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const created = await createTradingAccount({
+          name: newName.trim(),
+          broker: newBroker.trim() || null,
+          account_type: newType || null,
+          is_default: newDefault || accounts.length === 0,
+        });
+        const row = created as TradingAccount;
+        onAccountsChange(
+          row.is_default
+            ? [row, ...accounts.map((a) => ({ ...a, is_default: false }))]
+            : [...accounts, row]
+        );
+        setNewName("");
+        setNewBroker("");
+        setNewType("");
+        setNewDefault(false);
+        setCreating(false);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to create account");
+      }
+    });
+  }
+
+  const wrapperClass =
+    variant === "settings"
+      ? "space-y-3"
+      : "space-y-2 p-3 rounded-lg border border-border/60 bg-background/40";
 
   return (
-    <div className="space-y-2 p-3 rounded-lg border border-border/60 bg-background/40">
+    <div className={wrapperClass}>
       {error && (
         <p className="text-xs text-danger bg-danger/10 border border-danger/30 rounded-md p-2">
           {error}
         </p>
       )}
+
+      {showCreate && (
+        <div className="space-y-2">
+          {!creating && accounts.length > 0 ? (
+            <button
+              type="button"
+              className="text-sm text-primary hover:underline"
+              onClick={() => setCreating(true)}
+            >
+              + Add account
+            </button>
+          ) : (
+            <form onSubmit={handleCreate} className="space-y-3 p-3 rounded-lg border border-border/60 bg-background/30">
+              <p className="text-sm font-medium">
+                {accounts.length === 0 ? "Create your first account" : "New account"}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Name</label>
+                  <input
+                    className="input"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="e.g. Topstep 50K Eval"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">Broker (optional)</label>
+                  <input
+                    className="input"
+                    value={newBroker}
+                    onChange={(e) => setNewBroker(e.target.value)}
+                    placeholder="TopstepX, Tradovate…"
+                  />
+                </div>
+                <div>
+                  <label className="label">Type</label>
+                  <select
+                    className="input"
+                    value={newType}
+                    onChange={(e) => setNewType(e.target.value as AccountType | "")}
+                  >
+                    <option value="">—</option>
+                    <option value="eval">Eval</option>
+                    <option value="funded">Funded</option>
+                    <option value="personal">Personal</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 text-sm self-end pb-2">
+                  <input
+                    type="checkbox"
+                    checked={newDefault}
+                    onChange={(e) => setNewDefault(e.target.checked)}
+                  />
+                  Default account
+                </label>
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" className="btn btn-primary text-sm" disabled={pending}>
+                  {pending ? "Creating…" : "Create account"}
+                </button>
+                {accounts.length > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary text-sm"
+                    onClick={() => setCreating(false)}
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      {accounts.length === 0 && !showCreate && (
+        <p className="text-sm text-muted">No trading accounts yet.</p>
+      )}
+
       {accounts.map((account) => (
         <div
           key={account.id}
-          className="flex flex-wrap items-center gap-2 py-1.5 border-b border-border/40 last:border-0"
+          className={`flex flex-wrap items-center gap-2 py-2 ${
+            variant === "settings" ? "border-b border-border/40 last:border-0" : "py-1.5 border-b border-border/40 last:border-0"
+          }`}
         >
           {editingId === account.id ? (
             <form
               onSubmit={handleUpdate}
               className="flex flex-wrap items-end gap-2 w-full"
             >
-              <input
-                name="name"
-                className="input text-sm flex-1 min-w-[140px]"
-                defaultValue={account.name}
-                placeholder="Account name"
-                required
-              />
-              <input
-                name="broker"
-                className="input text-sm flex-1 min-w-[120px]"
-                defaultValue={account.broker ?? ""}
-                placeholder="Broker (optional)"
-              />
-              <select
-                name="account_type"
-                className="input text-sm"
-                defaultValue={account.account_type ?? ""}
-              >
-                <option value="">Type —</option>
-                <option value="eval">Eval</option>
-                <option value="funded">Funded</option>
-                <option value="personal">Personal</option>
-              </select>
-              <label className="text-xs text-muted flex items-center gap-1.5 shrink-0">
+              <div className="flex-1 min-w-[140px]">
+                <label className="label">Name</label>
+                <input
+                  name="name"
+                  className="input text-sm"
+                  defaultValue={account.name}
+                  required
+                />
+              </div>
+              <div className="flex-1 min-w-[120px]">
+                <label className="label">Broker</label>
+                <input
+                  name="broker"
+                  className="input text-sm"
+                  defaultValue={account.broker ?? ""}
+                  placeholder="Optional"
+                />
+              </div>
+              <div className="min-w-[120px]">
+                <label className="label">Type</label>
+                <select
+                  name="account_type"
+                  className="input text-sm"
+                  defaultValue={account.account_type ?? ""}
+                >
+                  <option value="">—</option>
+                  <option value="eval">Eval</option>
+                  <option value="funded">Funded</option>
+                  <option value="personal">Personal</option>
+                </select>
+              </div>
+              <label className="text-xs text-muted flex items-center gap-1.5 shrink-0 pb-2">
                 <input
                   type="checkbox"
                   name="is_default"
@@ -131,7 +266,7 @@ export function AccountManager({
               )}
               {account.is_default && (
                 <span className="text-xs text-primary" title="Default account">
-                  ★
+                  ★ Default
                 </span>
               )}
               <button
@@ -139,7 +274,7 @@ export function AccountManager({
                 className="text-xs text-primary hover:underline ml-auto"
                 onClick={() => setEditingId(account.id)}
               >
-                Rename
+                Edit
               </button>
             </>
           )}

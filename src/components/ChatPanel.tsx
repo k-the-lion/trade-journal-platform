@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ChatCoachFilters } from "@/components/ChatCoachFilters";
+import { ChatPlaybookSelect, type PlaybookOption } from "@/components/ChatPlaybookSelect";
 import { ChatMarkdown } from "@/components/ChatMarkdown";
 import type { CoachTradeFilters } from "@/lib/ai/coach-filters";
 import type {
@@ -21,6 +22,7 @@ export function ChatPanel({
   strategies,
   tagPresets,
   trades,
+  playbookOptions,
 }: {
   session: ChatSession;
   initialMessages: ChatMessage[];
@@ -28,6 +30,7 @@ export function ChatPanel({
   strategies: TradingStrategy[];
   tagPresets: TradingTagPreset[];
   trades: Trade[];
+  playbookOptions: PlaybookOption[];
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState(initialMessages);
@@ -150,6 +153,11 @@ export function ChatPanel({
             journals, tags, notes, and screenshot links for the filtered scope.
           </p>
         </div>
+        <ChatPlaybookSelect
+          sessionId={session.id}
+          playbookKey={session.playbook_key ?? "auto"}
+          options={playbookOptions}
+        />
         <ChatCoachFilters
           filters={filters}
           onChange={setFilters}
@@ -163,8 +171,8 @@ export function ChatPanel({
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <p className="text-sm text-muted text-center py-8">
-            Ask about your trades, daily journal, rule adherence, or performance. Set filters above
-            to focus on an account, strategy, or tag.
+            Ask about your trades, daily journal, rule adherence, or performance. Pick a playbook
+            for coaching style and use filters to scope trade data.
           </p>
         )}
         {messages.map((msg) => (

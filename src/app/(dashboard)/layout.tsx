@@ -19,7 +19,7 @@ export default async function DashboardLayout({
   return (
     <>
       <DashboardNav email={profile.email} />
-      <main className="max-w-6xl mx-auto px-4 py-8">{children}</main>
+      <main className="max-w-[90rem] mx-auto px-4 py-8">{children}</main>
     </>
   );
 }

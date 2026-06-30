@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
+import { buildPlaybookOptions } from "@/components/ChatPlaybookSelect";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { getDashboardData } from "@/lib/dashboard/data";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ChatSessionSidebar } from "@/components/ChatSessionSidebar";
 import { openChatSession } from "@/lib/actions";
-import type { ChatMessage, ChatSession } from "@/lib/types/database";
+import type { ChatMessage, ChatSession, UserCoachPlaybook } from "@/lib/types/database";
 
 export default async function ChatPage({
   searchParams,
@@ -33,9 +34,15 @@ export default async function ChatPage({
     redirect(`/chat?session=${fresh.id}`);
   }
 
-  const activeSession = session;
+  const activeSession = session as ChatSession;
 
-  const [{ data: messages }, { data: allSessions }, dashboard] = await Promise.all([
+  const [
+    { data: messages },
+    { data: allSessions },
+    { data: userPlaybooks },
+    orgRes,
+    dashboard,
+  ] = await Promise.all([
     supabase
       .from("chat_messages")
       .select("*")
@@ -47,8 +54,27 @@ export default async function ChatPage({
       .eq("user_id", profile.id)
       .order("updated_at", { ascending: false })
       .limit(30),
+    supabase
+      .from("user_coach_playbooks")
+      .select("*")
+      .eq("user_id", profile.id)
+      .order("is_default", { ascending: false })
+      .order("name"),
+    activeSession.org_id
+      ? supabase
+          .from("organizations")
+          .select("name")
+          .eq("id", activeSession.org_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
     getDashboardData(profile.id),
   ]);
+
+  const orgName = (orgRes.data as { name: string } | null)?.name ?? null;
+  const playbookOptions = buildPlaybookOptions(
+    (userPlaybooks ?? []) as UserCoachPlaybook[],
+    orgName
+  );
 
   const sessionsList = ((allSessions ?? []) as (ChatSession & {
     chat_messages: { count: number }[];
@@ -64,8 +90,8 @@ export default async function ChatPage({
       <div>
         <h1 className="text-2xl font-semibold">AI Coach</h1>
         <p className="text-muted text-sm mt-1">
-          Coaching grounded in your trades, daily journals, strategies, tags, notes, and chart
-          links — filter the context before you ask.
+          Pick a coaching playbook, filter your data, then ask about trades, journals, and
+          performance.
         </p>
       </div>
 
@@ -83,6 +109,7 @@ export default async function ChatPage({
             strategies={dashboard.strategies}
             tagPresets={dashboard.tagPresets}
             trades={dashboard.trades}
+            playbookOptions={playbookOptions}
           />
         </div>
       </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient, getProfile } from "@/lib/supabase/server";
+import { resolvePlaybookForChat } from "@/lib/ai/resolve-playbook";
 import { buildSystemPrompt } from "@/lib/ai/context";
 import type { CoachTradeFilters } from "@/lib/ai/coach-filters";
 import { loadCoachData } from "@/lib/ai/load-coach-data";
@@ -114,49 +115,18 @@ export async function POST(request: Request) {
 
     const coachData = await loadCoachData(supabase, profile.id, filters);
 
-    let playbook: CoachingPlaybook | null = null;
-
-    if (session.org_id) {
-      const { data } = await supabase
-        .from("coaching_playbooks")
-        .select("*")
-        .eq("org_id", session.org_id)
-        .eq("is_active", true)
-        .order("version", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      playbook = data;
-    }
-
-    if (!playbook) {
-      const { data } = await supabase
-        .from("coaching_playbooks")
-        .select("*")
-        .is("org_id", null)
-        .eq("is_active", true)
-        .limit(1)
-        .maybeSingle();
-      playbook = data;
-    }
-
-    const defaultPlaybook: CoachingPlaybook = {
-      id: "default",
-      org_id: null,
-      name: "Default",
-      tone: "supportive",
-      topics_to_emphasize: ["risk management", "rule adherence"],
-      topics_to_avoid: ["specific trade calls"],
-      custom_rules: "Never give buy/sell signals.",
-      review_checklist: "Ask reflective questions before giving advice.",
-      is_active: true,
-      version: 1,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    const playbookKey =
+      (session as { playbook_key?: string }).playbook_key ?? "auto";
+    const playbook: CoachingPlaybook = await resolvePlaybookForChat(
+      supabase,
+      profile.id,
+      playbookKey,
+      session.org_id
+    );
 
     const systemPrompt = buildSystemPrompt(
       profile,
-      playbook ?? defaultPlaybook,
+      playbook,
       coachData.filteredTrades,
       coachData.dailyJournals,
       filters,
