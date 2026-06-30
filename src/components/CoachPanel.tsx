@@ -4,11 +4,60 @@ import { useState } from "react";
 import { createOrganization, inviteStudent } from "@/lib/actions";
 import type { Organization } from "@/lib/types/database";
 
+function inviteLink(token: string): string {
+  if (typeof window === "undefined") return `/invite?token=${token}`;
+  return `${window.location.origin}/invite?token=${token}`;
+}
+
+function InviteLinkCard({ email, link }: { email: string; link: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Fallback for older browsers / denied permission
+      const input = document.createElement("input");
+      input.value = link;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
+  return (
+    <div className="card p-4 max-w-2xl space-y-3 border border-primary/30 bg-primary/5">
+      <div>
+        <p className="text-sm text-foreground font-medium">Invite link ready for {email}</p>
+        <p className="text-xs text-muted mt-1">
+          No email is sent automatically. Copy this link and send it to your student — they must
+          sign up or log in with <span className="text-foreground">{email}</span>, then accept.
+          Link expires in 7 days.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <input className="input flex-1 min-w-[200px] text-xs font-mono" readOnly value={link} />
+        <button type="button" className="btn btn-primary text-sm shrink-0" onClick={handleCopy}>
+          {copied ? "Copied!" : "Copy link"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function CoachPanel({ organizations }: { organizations: Organization[] }) {
   const [orgs, setOrgs] = useState(organizations);
   const [newOrgName, setNewOrgName] = useState("");
   const [inviteEmail, setInviteEmail] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingInvite, setPendingInvite] = useState<{ email: string; link: string } | null>(
+    null
+  );
   const [loading, setLoading] = useState(false);
 
   async function handleCreateOrg(e: React.FormEvent) {
@@ -16,6 +65,7 @@ export function CoachPanel({ organizations }: { organizations: Organization[] })
     if (!newOrgName.trim()) return;
     setLoading(true);
     setMessage(null);
+    setPendingInvite(null);
     try {
       const org = await createOrganization(newOrgName.trim());
       setOrgs((prev) => [...prev, org]);
@@ -33,12 +83,14 @@ export function CoachPanel({ organizations }: { organizations: Organization[] })
     if (!email) return;
     setLoading(true);
     setMessage(null);
+    setPendingInvite(null);
     try {
       const invite = await inviteStudent(orgId, email);
-      setMessage(`Invite sent to ${email}. Share token: ${invite.token}`);
+      const link = inviteLink(invite.token);
+      setPendingInvite({ email, link });
       setInviteEmail((prev) => ({ ...prev, [orgId]: "" }));
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Failed to invite");
+      setMessage(err instanceof Error ? err.message : "Failed to create invite");
     } finally {
       setLoading(false);
     }
@@ -65,6 +117,10 @@ export function CoachPanel({ organizations }: { organizations: Organization[] })
         <div className="text-sm text-muted card p-3 max-w-2xl">{message}</div>
       )}
 
+      {pendingInvite && (
+        <InviteLinkCard email={pendingInvite.email} link={pendingInvite.link} />
+      )}
+
       {orgs.length === 0 ? (
         <p className="text-muted text-sm">No organizations yet. Create one to invite students.</p>
       ) : (
@@ -76,23 +132,29 @@ export function CoachPanel({ organizations }: { organizations: Organization[] })
                 View students →
               </a>
             </div>
-            <div className="flex gap-2">
-              <input
-                className="input flex-1"
-                placeholder="student@email.com"
-                value={inviteEmail[org.id] ?? ""}
-                onChange={(e) =>
-                  setInviteEmail((prev) => ({ ...prev, [org.id]: e.target.value }))
-                }
-              />
-              <button
-                type="button"
-                className="btn btn-secondary shrink-0"
-                onClick={() => handleInvite(org.id)}
-                disabled={loading}
-              >
-                Invite
-              </button>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  placeholder="student@email.com"
+                  value={inviteEmail[org.id] ?? ""}
+                  onChange={(e) =>
+                    setInviteEmail((prev) => ({ ...prev, [org.id]: e.target.value }))
+                  }
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary shrink-0"
+                  onClick={() => handleInvite(org.id)}
+                  disabled={loading}
+                >
+                  Create invite link
+                </button>
+              </div>
+              <p className="text-xs text-muted">
+                Generates a shareable link — nothing is emailed. Your student must use the invited
+                email address when they join.
+              </p>
             </div>
             <a href={`/coach/playbook?org=${org.id}`} className="text-sm text-muted hover:text-primary">
               Edit AI coaching playbook →
