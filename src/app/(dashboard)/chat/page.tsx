@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { buildPlaybookOptions } from "@/components/ChatPlaybookSelect";
+import { buildPlaybookOptions } from "@/lib/ai/playbook-options";
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { getDashboardData } from "@/lib/dashboard/data";
 import { ChatPanel } from "@/components/ChatPanel";
