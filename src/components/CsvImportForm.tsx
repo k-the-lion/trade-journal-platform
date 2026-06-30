@@ -47,7 +47,7 @@ const EXPORT_GUIDES: Record<ImportPreset, string> = {
   tradovate_position:
     "Tradovate → Accounts → gear icon → Position History → date range → Download Report. Best for P&L.",
   tradovate_orders:
-    "Tradovate → Reports → Orders tab (NOT Performance) → Download CSV. Orders lack round-trip P&L.",
+    "Tradovate → Reports → Orders tab (NOT Performance) → Download CSV. We pair buy/sell fills into round trips with calculated P&L.",
   tradingview_balance:
     "TradingView → Paper Trading panel → Balance History tab → Export data. Each row is a closed trade with realized P&L.",
   tradingview_orders:

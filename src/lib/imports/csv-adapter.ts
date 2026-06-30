@@ -44,17 +44,25 @@ export function buildMappingFromHeaders(
   const fields = Object.keys(base) as (keyof CsvColumnMapping)[];
 
   const aliases: Record<keyof CsvColumnMapping, string[]> = {
-    traded_at: ["Date", "Time", "Fill Time", "Timestamp", "Exit Time"],
+    traded_at: ["Fill Time", "Timestamp", "Exit Time", "Date", "Time"],
     symbol: ["Symbol", "Contract", "Product", "Instrument"],
-    direction: ["Direction", "Side", "B/S", "Buy/Sell"],
-    entry_price: ["Entry", "Entry Price", "Avg Entry", "Open Price"],
-    exit_price: ["Exit", "Exit Price", "Avg Exit", "Close Price"],
-    quantity: ["Quantity", "Qty", "Size", "filledQty", "Filled Qty"],
+    direction: ["Direction", "B/S", "Side", "Buy/Sell"],
+    entry_price: [
+      "Avg Fill Price",
+      "avgPrice",
+      "decimalFillAvg",
+      "Entry Price",
+      "Avg Entry",
+      "Open Price",
+      "Entry",
+    ],
+    exit_price: ["Exit Price", "Avg Exit", "Close Price", "Exit"],
+    quantity: ["filledQty", "Filled Qty", "Quantity", "Qty", "Size"],
     pnl: ["PnL", "P&L", "Net P&L", "Realized P&L", "Profit/Loss"],
     r_multiple: ["R", "R-Multiple", "R Multiple"],
-    setup_tag: ["Setup", "Strategy", "Tag"],
-    notes: ["Notes", "Comment", "Description"],
-    external_id: ["ID", "Id", "orderId", "Order ID", "Trade ID"],
+    setup_tag: ["Setup", "Strategy", "Tag", "Type", "Text"],
+    notes: ["Notes", "Comment", "Description", "Product Description"],
+    external_id: ["orderId", "Order ID", "Order Id", "ID", "Id", "Trade ID"],
   };
 
   for (const field of fields) {
