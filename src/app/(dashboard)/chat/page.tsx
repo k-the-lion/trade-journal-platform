@@ -76,6 +76,7 @@ export default async function ChatPage({
         />
         <div className="flex-1 min-w-0">
           <ChatPanel
+            key={activeSession.id}
             session={activeSession}
             initialMessages={(messages ?? []) as ChatMessage[]}
             accounts={dashboard.accounts}

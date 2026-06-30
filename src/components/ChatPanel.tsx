@@ -42,6 +42,13 @@ export function ChatPanel({
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    setMessages(initialMessages);
+    setSessionTitle(session.title);
+    setInput("");
+    setLoading(false);
+  }, [session.id, session.title, initialMessages]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
