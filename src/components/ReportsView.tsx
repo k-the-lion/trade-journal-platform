@@ -34,6 +34,7 @@ import {
   type ReportTradeFilters,
 } from "@/lib/reports/filter-trades";
 import type {
+  DailyJournalEntry,
   Trade,
   TradingAccount,
   TradingStrategy,
@@ -57,11 +58,13 @@ export function ReportsView({
   accounts,
   strategies,
   tagPresets,
+  dailyJournals,
 }: {
   trades: Trade[];
   accounts: TradingAccount[];
   strategies: TradingStrategy[];
   tagPresets: TradingTagPreset[];
+  dailyJournals: DailyJournalEntry[];
 }) {
   const [filters, setFilters] = useState<ReportTradeFilters>({
     accountIds: [],
@@ -252,7 +255,7 @@ export function ReportsView({
 
           <EquityCurveChart data={equity} />
 
-          <PnlCalendar dailyPnl={dailyPnl} />
+          <PnlCalendar dailyPnl={dailyPnl} dailyJournals={dailyJournals} />
 
           <div>
             <h2 className="text-lg font-medium mb-4">P&L breakdowns</h2>

@@ -1,13 +1,24 @@
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { ReportsView } from "@/components/ReportsView";
-import type { Trade, TradingAccount, TradingStrategy, TradingTagPreset } from "@/lib/types/database";
+import type {
+  DailyJournalEntry,
+  Trade,
+  TradingAccount,
+  TradingStrategy,
+  TradingTagPreset,
+} from "@/lib/types/database";
 
 export default async function ReportsPage() {
   const supabase = await createClient();
   const profile = await getProfile();
 
-  const [{ data: trades }, { data: accounts }, { data: strategies }, { data: tagPresets }] =
-    await Promise.all([
+  const [
+    { data: trades },
+    { data: accounts },
+    { data: strategies },
+    { data: tagPresets },
+    { data: dailyJournals },
+  ] = await Promise.all([
       supabase
         .from("trades")
         .select("*, trade_tags(*), trading_accounts(*), trading_strategies(*)")
@@ -32,6 +43,11 @@ export default async function ReportsPage() {
         .eq("user_id", profile!.id)
         .order("sort_order")
         .order("name"),
+      supabase
+        .from("daily_journal_entries")
+        .select("*")
+        .eq("user_id", profile!.id)
+        .order("journal_date", { ascending: false }),
     ]);
 
   return (
@@ -40,6 +56,7 @@ export default async function ReportsPage() {
       accounts={(accounts ?? []) as TradingAccount[]}
       strategies={(strategies ?? []) as TradingStrategy[]}
       tagPresets={(tagPresets ?? []) as TradingTagPreset[]}
+      dailyJournals={(dailyJournals ?? []) as DailyJournalEntry[]}
     />
   );
 }
