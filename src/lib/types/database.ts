@@ -105,6 +105,24 @@ export interface DailyJournalEntry {
   updated_at: string;
 }
 
+export interface UserTradingGoals {
+  user_id: string;
+  monthly_profit_target: number | null;
+  min_win_rate_pct: number | null;
+  max_daily_loss: number | null;
+  monthly_trade_target: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserTradingRule {
+  id: string;
+  user_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface TradingStrategy {
   id: string;
   user_id: string;
@@ -303,6 +321,16 @@ export interface Database {
         DailyJournalEntry,
         Partial<DailyJournalEntry> & { user_id: string; journal_date: string },
         Partial<DailyJournalEntry>
+      >;
+      user_trading_goals: TableDef<
+        UserTradingGoals,
+        Partial<UserTradingGoals> & { user_id: string },
+        Partial<UserTradingGoals>
+      >;
+      user_trading_rules: TableDef<
+        UserTradingRule,
+        Partial<UserTradingRule> & { user_id: string; name: string },
+        Partial<UserTradingRule>
       >;
       import_jobs: TableDef<ImportJob, Partial<ImportJob> & { user_id: string; source: ImportSource }, Partial<ImportJob>>;
       broker_sync_connections: TableDef<

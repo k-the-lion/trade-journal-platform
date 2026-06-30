@@ -15,7 +15,6 @@ import { computeTradeStats, formatCurrency } from "@/lib/reports/stats";
 import { isAllowedChartLink, normalizeChartLink } from "@/lib/screenshots";
 import { MoodPicker } from "@/components/MoodPicker";
 import { FilterPanel } from "@/components/FilterPanel";
-import { DeleteAllTradesPanel } from "@/components/DeleteAllTradesPanel";
 import { DeleteTradeButton } from "@/components/DeleteTradeButton";
 import { StatCard } from "@/components/StatCard";
 import { TagPicker } from "@/components/TagPicker";
@@ -565,8 +564,6 @@ export function TradeJournalBoard({
           </div>
         )}
       </div>
-
-      <DeleteAllTradesPanel tradeCount={trades.length} />
     </div>
   );
 }

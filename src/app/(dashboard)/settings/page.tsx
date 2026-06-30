@@ -14,6 +14,7 @@ const VALID_TABS: SettingsTab[] = [
   "strategies",
   "playbooks",
   "coach",
+  "danger",
 ];
 
 function isPlaybooksTableMissing(error: { code?: string; message?: string } | null) {
@@ -51,6 +52,7 @@ export default async function SettingsPage({
     { data: accounts },
     { data: strategies },
     { data: tagPresets },
+    { count: tradeCount },
   ] = await Promise.all([
     supabase
       .from("user_coach_playbooks")
@@ -77,6 +79,10 @@ export default async function SettingsPage({
       .eq("user_id", profile.id)
       .order("sort_order")
       .order("name"),
+    supabase
+      .from("trades")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", profile.id),
   ]);
 
   const tabTitles: Record<SettingsTab, string> = {
@@ -85,6 +91,7 @@ export default async function SettingsPage({
     strategies: "Strategies & tags",
     playbooks: "AI playbooks",
     coach: "Coach groups",
+    danger: "Danger zone",
   };
 
   return (
@@ -102,6 +109,7 @@ export default async function SettingsPage({
         playbooks={(playbooks ?? []) as UserCoachPlaybook[]}
         playbooksUnavailable={isPlaybooksTableMissing(playbooksError)}
         isCoach={isCoach}
+        tradeCount={tradeCount ?? 0}
       />
     </div>
   );

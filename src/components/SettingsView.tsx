@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AccountManager } from "@/components/AccountManager";
+import { DeleteAllTradesPanel } from "@/components/DeleteAllTradesPanel";
 import { StrategyManager } from "@/components/StrategyManager";
 import { TagPresetManager } from "@/components/TagPresetManager";
 import {
@@ -21,7 +22,7 @@ import type {
   UserCoachPlaybook,
 } from "@/lib/types/database";
 
-export type SettingsTab = "profile" | "accounts" | "strategies" | "playbooks" | "coach";
+export type SettingsTab = "profile" | "accounts" | "strategies" | "playbooks" | "coach" | "danger";
 
 const TONE_OPTIONS = [
   { value: "supportive", label: "Supportive" },
@@ -59,6 +60,7 @@ export function SettingsView({
   playbooks: initialPlaybooks,
   playbooksUnavailable = false,
   isCoach,
+  tradeCount = 0,
 }: {
   activeTab: SettingsTab;
   profile: Profile;
@@ -68,6 +70,7 @@ export function SettingsView({
   playbooks: UserCoachPlaybook[];
   playbooksUnavailable?: boolean;
   isCoach: boolean;
+  tradeCount?: number;
 }) {
   const [fullName, setFullName] = useState(profile.full_name ?? "");
   const [email, setEmail] = useState(profile.email);
@@ -92,6 +95,7 @@ export function SettingsView({
   if (isCoach) {
     tabs.push({ id: "coach", label: "Coach groups" });
   }
+  tabs.push({ id: "danger", label: "Danger zone" });
 
   async function handleSaveName(e: React.FormEvent) {
     e.preventDefault();
@@ -521,6 +525,22 @@ export function SettingsView({
           <Link href="/coach" className="btn btn-secondary text-sm inline-flex">
             Open coach dashboard
           </Link>
+        </section>
+      )}
+
+      {activeTab === "danger" && (
+        <section className="space-y-4 max-w-2xl">
+          <div>
+            <h2 className="font-medium">Danger zone</h2>
+            <p className="text-xs text-muted mt-1">
+              Destructive actions for your journal data. Trading accounts and settings are kept.
+            </p>
+          </div>
+          {tradeCount > 0 ? (
+            <DeleteAllTradesPanel tradeCount={tradeCount} />
+          ) : (
+            <p className="text-sm text-muted card p-4">No trades to delete.</p>
+          )}
         </section>
       )}
     </div>

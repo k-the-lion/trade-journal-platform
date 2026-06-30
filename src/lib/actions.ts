@@ -607,6 +607,8 @@ export async function deleteAllTrades() {
   revalidatePath("/dashboard");
   revalidatePath("/import");
   revalidatePath("/reports");
+  revalidatePath("/settings");
+  revalidatePath("/tools");
 
   return { deleted };
 }
@@ -1140,4 +1142,76 @@ export async function updateChatSessionPlaybook(sessionId: string, playbookKey: 
 
   if (error) throw new Error(error.message);
   revalidatePath("/chat");
+}
+
+export async function upsertTradingGoals(data: {
+  monthly_profit_target?: number | null;
+  min_win_rate_pct?: number | null;
+  max_daily_loss?: number | null;
+  monthly_trade_target?: number | null;
+}) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const payload = {
+    user_id: profile.id,
+    monthly_profit_target: data.monthly_profit_target ?? null,
+    min_win_rate_pct: data.min_win_rate_pct ?? null,
+    max_daily_loss: data.max_daily_loss ?? null,
+    monthly_trade_target: data.monthly_trade_target ?? null,
+  };
+
+  const { data: row, error } = await supabase
+    .from("user_trading_goals")
+    .upsert(payload, { onConflict: "user_id" })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/tools");
+  return row;
+}
+
+export async function createTradingRule(name: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Rule name is required");
+
+  const { data: existing } = await supabase
+    .from("user_trading_rules")
+    .select("sort_order")
+    .eq("user_id", profile.id)
+    .order("sort_order", { ascending: false })
+    .limit(1);
+
+  const sort_order = (existing?.[0]?.sort_order ?? -1) + 1;
+
+  const { data, error } = await supabase
+    .from("user_trading_rules")
+    .insert({ user_id: profile.id, name: trimmed, sort_order })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/tools");
+  return data;
+}
+
+export async function deleteTradingRule(id: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { error } = await supabase
+    .from("user_trading_rules")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", profile.id);
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/tools");
 }

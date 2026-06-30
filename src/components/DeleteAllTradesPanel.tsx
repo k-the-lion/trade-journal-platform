@@ -16,7 +16,7 @@ export function DeleteAllTradesPanel({ tradeCount }: { tradeCount: number }) {
       await deleteAllTrades();
       setOpen(false);
       setConfirmText("");
-      window.location.reload();
+      window.location.href = "/dashboard";
     });
   }
 
