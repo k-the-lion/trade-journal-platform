@@ -75,7 +75,7 @@ export default async function ImportPage() {
       <div>
         <h1 className="text-2xl font-semibold">Import Trades</h1>
         <p className="text-muted text-sm mt-1">
-          Sync from TopstepX or Tradovate automatically, or upload a CSV from any supported broker.
+          Upload a broker CSV, or connect TopstepX or Tradovate for automatic sync.
         </p>
       </div>
 
@@ -87,54 +87,8 @@ export default async function ImportPage() {
         tradovateConnections={tradovateConnections}
         tradovateOAuthConfigured={tradovateOAuthConfigured}
         tradovateOAuthRedirectUri={tradovateOAuthRedirectUri}
+        adapters={adapters}
       />
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-5xl">
-        <div className="card p-5 space-y-2">
-          <h2 className="font-medium text-sm">TopStep X API</h2>
-          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
-            <li>Subscribe to ProjectX API in TopstepX Settings</li>
-            <li>Copy your username and API key</li>
-            <li>Connect above — first sync pulls your trade history</li>
-            <li>Use <strong className="text-foreground">Sync now</strong> anytime for new trades</li>
-          </ol>
-        </div>
-        <div className="card p-5 space-y-2">
-          <h2 className="font-medium text-sm">TopStep X CSV</h2>
-          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
-            <li>Open TopStep X and select your account</li>
-            <li>Go to the <strong className="text-foreground">Trades</strong> tab at the bottom</li>
-            <li>Click <strong className="text-foreground">Export</strong> and choose your date range</li>
-            <li>Upload via the CSV tab — choose &quot;TopStep X&quot; or Auto-detect</li>
-          </ol>
-        </div>
-        <div className="card p-5 space-y-2">
-          <h2 className="font-medium text-sm">Tradovate</h2>
-          <ol className="text-xs text-muted list-decimal pl-4 space-y-1">
-            <li>Click <strong className="text-foreground">Connect with Tradovate</strong></li>
-            <li>Log in on Tradovate&apos;s site and approve read-only access</li>
-            <li>No API subscription needed on your account</li>
-            <li>Pick accounts, then <strong className="text-foreground">Sync now</strong></li>
-          </ol>
-        </div>
-      </div>
-
-      <div className="card p-6 max-w-2xl space-y-3">
-        <h2 className="font-medium text-sm">Supported CSV formats</h2>
-        <ul className="text-sm text-muted space-y-2">
-          {adapters.map((a) => (
-            <li key={a.name}>
-              <span className="text-foreground">{a.name}</span>
-              {a.supportedFields && (
-                <span className="block text-xs mt-0.5">
-                  Columns: {a.supportedFields.slice(0, 8).join(", ")}
-                  {a.supportedFields.length > 8 ? "…" : ""}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
-      </div>
 
       {(jobs ?? []).length > 0 && (
         <div className="card overflow-hidden max-w-2xl">

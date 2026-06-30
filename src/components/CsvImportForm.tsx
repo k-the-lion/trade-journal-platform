@@ -414,7 +414,7 @@ export function CsvImportForm({
               <div>
                 <p className="text-sm font-medium">Drop your CSV here</p>
                 <p className="text-xs text-muted mt-1">
-                  or click to browse — TradingView Balance History, TopStep X, Tradovate, etc.
+                  or click to browse — exports from TopStep X, Tradovate, TradingView, and more
                 </p>
               </div>
               <span className="btn btn-primary text-sm pointer-events-none">

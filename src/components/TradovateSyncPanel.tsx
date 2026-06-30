@@ -315,10 +315,6 @@ export function TradovateSyncPanel({
               </a>{" "}
               to register a third-party OAuth app for this journal.
             </p>
-            <p className="text-xs">
-              Until then: use <strong className="text-foreground">CSV upload</strong> → Tradovate
-              Position History.
-            </p>
           </div>
         )}
 

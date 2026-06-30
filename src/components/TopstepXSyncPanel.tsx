@@ -241,7 +241,7 @@ export function TopstepXSyncPanel({
             >
               ProjectX API subscription
             </a>{" "}
-            (~$15–29/mo from TopstepX). Trades sync with duplicate detection — same as CSV import.
+            (~$15–29/mo from TopstepX). Trades sync automatically with duplicate detection.
           </p>
         </div>
 
