@@ -1144,18 +1144,31 @@ export async function updateChatSessionPlaybook(sessionId: string, playbookKey: 
   revalidatePath("/chat");
 }
 
-export async function upsertTradingGoals(data: {
-  monthly_profit_target?: number | null;
-  min_win_rate_pct?: number | null;
-  max_daily_loss?: number | null;
-  monthly_trade_target?: number | null;
-}) {
+export async function upsertTradingGoals(
+  accountId: string,
+  data: {
+    monthly_profit_target?: number | null;
+    min_win_rate_pct?: number | null;
+    max_daily_loss?: number | null;
+    monthly_trade_target?: number | null;
+  }
+) {
   const supabase = await createClient();
   const profile = await getProfile();
   if (!profile) throw new Error("Not authenticated");
 
+  const { data: account } = await supabase
+    .from("trading_accounts")
+    .select("id")
+    .eq("id", accountId)
+    .eq("user_id", profile.id)
+    .maybeSingle();
+
+  if (!account) throw new Error("Account not found");
+
   const payload = {
     user_id: profile.id,
+    account_id: accountId,
     monthly_profit_target: data.monthly_profit_target ?? null,
     min_win_rate_pct: data.min_win_rate_pct ?? null,
     max_daily_loss: data.max_daily_loss ?? null,
@@ -1164,7 +1177,7 @@ export async function upsertTradingGoals(data: {
 
   const { data: row, error } = await supabase
     .from("user_trading_goals")
-    .upsert(payload, { onConflict: "user_id" })
+    .upsert(payload, { onConflict: "account_id" })
     .select()
     .single();
 

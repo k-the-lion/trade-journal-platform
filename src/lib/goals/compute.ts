@@ -77,10 +77,15 @@ export function computeGoalsProgress(
   goals: UserTradingGoals | null,
   trades: Trade[],
   journals: DailyJournalEntry[],
+  accountId: string | null,
   now = new Date()
 ): GoalsProgress {
+  const scopedTrades = accountId
+    ? trades.filter((t) => t.account_id === accountId)
+    : trades;
+
   const { start, end, daysInMonth, dayOfMonth, daysLeft } = monthBounds(now);
-  const monthTrades = trades.filter((t) => isInMonth(t.traded_at, start, end));
+  const monthTrades = scopedTrades.filter((t) => isInMonth(t.traded_at, start, end));
   const monthJournals = journals.filter((j) => {
     const d = new Date(`${j.journal_date}T12:00:00Z`);
     return d >= start && d <= end;

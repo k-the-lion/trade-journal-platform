@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   createTradingRule,
   deleteTradingRule,
@@ -14,10 +14,31 @@ import { formatCurrency } from "@/lib/reports/stats";
 import type {
   DailyJournalEntry,
   Trade,
+  TradingAccount,
   UserTradingGoals,
   UserTradingRule,
 } from "@/lib/types/database";
 import type { GoalStatus } from "@/lib/goals/compute";
+
+function goalsToForm(g: UserTradingGoals | null | undefined) {
+  return {
+    profitTarget: g?.monthly_profit_target?.toString() ?? "",
+    winRateTarget: g?.min_win_rate_pct?.toString() ?? "",
+    maxDailyLoss: g?.max_daily_loss?.toString() ?? "",
+    tradeTarget: g?.monthly_trade_target?.toString() ?? "",
+  };
+}
+
+function pickDefaultAccountId(
+  accounts: TradingAccount[],
+  goalsList: UserTradingGoals[]
+): string {
+  if (accounts.length === 0) return "";
+  const withGoals = new Set(goalsList.map((g) => g.account_id));
+  const defaultAccount = accounts.find((a) => a.is_default) ?? accounts[0];
+  const firstWithGoals = accounts.find((a) => withGoals.has(a.id));
+  return firstWithGoals?.id ?? defaultAccount.id;
+}
 
 function statusLabel(status: GoalStatus) {
   switch (status) {
@@ -57,40 +78,54 @@ function progressBarClass(status: GoalStatus) {
 }
 
 export function GoalsDashboard({
-  initialGoals,
+  accounts,
+  initialGoalsList,
   initialRules,
   trades,
   journals,
   goalsUnavailable = false,
 }: {
-  initialGoals: UserTradingGoals | null;
+  accounts: TradingAccount[];
+  initialGoalsList: UserTradingGoals[];
   initialRules: UserTradingRule[];
   trades: Trade[];
   journals: DailyJournalEntry[];
   goalsUnavailable?: boolean;
 }) {
-  const [goals, setGoals] = useState(initialGoals);
+  const [goalsByAccount, setGoalsByAccount] = useState(() => {
+    const map = new Map<string, UserTradingGoals>();
+    for (const g of initialGoalsList) map.set(g.account_id, g);
+    return map;
+  });
+  const [accountId, setAccountId] = useState(() =>
+    pickDefaultAccountId(accounts, initialGoalsList)
+  );
   const [rules, setRules] = useState(initialRules);
-  const [editing, setEditing] = useState(!initialGoals);
-  const [profitTarget, setProfitTarget] = useState(
-    initialGoals?.monthly_profit_target?.toString() ?? ""
-  );
-  const [winRateTarget, setWinRateTarget] = useState(
-    initialGoals?.min_win_rate_pct?.toString() ?? ""
-  );
-  const [maxDailyLoss, setMaxDailyLoss] = useState(
-    initialGoals?.max_daily_loss?.toString() ?? ""
-  );
-  const [tradeTarget, setTradeTarget] = useState(
-    initialGoals?.monthly_trade_target?.toString() ?? ""
-  );
+  const activeGoals = accountId ? goalsByAccount.get(accountId) ?? null : null;
+  const [editing, setEditing] = useState(false);
+  const [profitTarget, setProfitTarget] = useState("");
+  const [winRateTarget, setWinRateTarget] = useState("");
+  const [maxDailyLoss, setMaxDailyLoss] = useState("");
+  const [tradeTarget, setTradeTarget] = useState("");
   const [newRule, setNewRule] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const selectedAccount = accounts.find((a) => a.id === accountId) ?? null;
+
+  useEffect(() => {
+    const form = goalsToForm(accountId ? goalsByAccount.get(accountId) : null);
+    setProfitTarget(form.profitTarget);
+    setWinRateTarget(form.winRateTarget);
+    setMaxDailyLoss(form.maxDailyLoss);
+    setTradeTarget(form.tradeTarget);
+    setEditing(false);
+    setMsg(null);
+  }, [accountId, goalsByAccount]);
+
   const progress = useMemo(
-    () => computeGoalsProgress(goals, trades, journals),
-    [goals, trades, journals]
+    () => computeGoalsProgress(activeGoals, trades, journals, accountId || null),
+    [activeGoals, trades, journals, accountId]
   );
 
   function applyFromPropPlanner() {
@@ -114,18 +149,23 @@ export function GoalsDashboard({
 
   function handleSaveGoals(e: React.FormEvent) {
     e.preventDefault();
+    if (!accountId) return;
     setMsg(null);
     startTransition(async () => {
       try {
-        const row = await upsertTradingGoals({
+        const row = await upsertTradingGoals(accountId, {
           monthly_profit_target: profitTarget ? Number(profitTarget) : null,
           min_win_rate_pct: winRateTarget ? Number(winRateTarget) : null,
           max_daily_loss: maxDailyLoss ? Number(maxDailyLoss) : null,
           monthly_trade_target: tradeTarget ? Number(tradeTarget) : null,
         });
-        setGoals(row as UserTradingGoals);
+        setGoalsByAccount((prev) => {
+          const next = new Map(prev);
+          next.set(accountId, row as UserTradingGoals);
+          return next;
+        });
         setEditing(false);
-        setMsg("Goals saved.");
+        setMsg(`Goals saved for ${selectedAccount?.name ?? "account"}.`);
       } catch (err) {
         setMsg(err instanceof Error ? err.message : "Failed to save goals");
       }
@@ -156,19 +196,66 @@ export function GoalsDashboard({
   if (goalsUnavailable) {
     return (
       <p className="text-sm text-danger rounded-md border border-danger/30 bg-danger/10 p-3">
-        Goals tables are missing. Run migration{" "}
-        <code className="text-xs">016_trading_goals.sql</code> in Supabase.
+        Goals tables are missing. Run migrations{" "}
+        <code className="text-xs">016_trading_goals.sql</code> and{" "}
+        <code className="text-xs">017_goals_per_account.sql</code> in Supabase.
       </p>
+    );
+  }
+
+  if (accounts.length === 0) {
+    return (
+      <div className="card p-6 space-y-3 max-w-lg">
+        <p className="text-sm text-muted">
+          Add a trading account before setting per-account goals.
+        </p>
+        <Link href="/settings?tab=accounts" className="btn btn-primary text-sm inline-flex w-fit">
+          Manage accounts
+        </Link>
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      <div className="space-y-3">
+        <label className="label">Trading account</label>
+        <div className="flex flex-wrap gap-2">
+          {accounts.map((account) => {
+            const active = account.id === accountId;
+            const hasGoals = goalsByAccount.has(account.id);
+            return (
+              <button
+                key={account.id}
+                type="button"
+                onClick={() => setAccountId(account.id)}
+                className={`text-sm px-4 py-2 rounded-full border transition-colors ${
+                  active
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted hover:border-primary/40"
+                }`}
+              >
+                {account.name}
+                {account.is_default && " ★"}
+                {!hasGoals && !active && (
+                  <span className="ml-1 text-[10px] opacity-70">· no goals</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted">
-            Tracking for <span className="text-foreground">{progress.monthLabel}</span>
+            <span className="text-foreground font-medium">{selectedAccount?.name}</span>
+            {" · "}
+            {progress.monthLabel}
             {progress.daysLeft > 0 && ` · ${progress.daysLeft} days left`}
+          </p>
+          <p className="text-xs text-muted mt-1">
+            Progress uses trades assigned to this account only.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -250,15 +337,15 @@ export function GoalsDashboard({
       {!progress.hasAnyGoals && !editing && (
         <div className="card p-6 text-center space-y-3 max-w-lg">
           <p className="text-muted text-sm">
-            Set monthly targets to track profit, win rate, daily loss limits, and trade volume
-            against your journal.
+            Set monthly targets for <strong className="text-foreground">{selectedAccount?.name}</strong>{" "}
+            to track profit, win rate, daily loss limits, and trade volume.
           </p>
           <button
             type="button"
             className="btn btn-primary text-sm"
             onClick={() => setEditing(true)}
           >
-            Set up goals
+            Set up goals for this account
           </button>
         </div>
       )}

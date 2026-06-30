@@ -107,6 +107,7 @@ export interface DailyJournalEntry {
 
 export interface UserTradingGoals {
   user_id: string;
+  account_id: string;
   monthly_profit_target: number | null;
   min_win_rate_pct: number | null;
   max_daily_loss: number | null;
@@ -324,7 +325,7 @@ export interface Database {
       >;
       user_trading_goals: TableDef<
         UserTradingGoals,
-        Partial<UserTradingGoals> & { user_id: string },
+        Partial<UserTradingGoals> & { user_id: string; account_id: string },
         Partial<UserTradingGoals>
       >;
       user_trading_rules: TableDef<

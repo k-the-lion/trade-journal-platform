@@ -6,6 +6,7 @@ import { createClient, getProfile } from "@/lib/supabase/server";
 import type {
   DailyJournalEntry,
   Trade,
+  TradingAccount,
   UserTradingGoals,
   UserTradingRule,
 } from "@/lib/types/database";
@@ -21,7 +22,7 @@ const TAB_TITLES: Record<ToolsTab, { title: string; description: string }> = {
   goals: {
     title: "Trading goals",
     description:
-      "Set monthly targets and track profit, win rate, daily loss limits, and consistency against your live journal data.",
+      "Set monthly targets per trading account and track profit, win rate, daily loss limits, and consistency.",
   },
   planner: {
     title: "Prop Planner",
@@ -71,16 +72,23 @@ export default async function ToolsPage({
   const [
     { data: goals, error: goalsError },
     { data: rules },
+    { data: accounts },
     { data: trades },
     { data: journals },
   ] = await Promise.all([
-    supabase.from("user_trading_goals").select("*").eq("user_id", profile.id).maybeSingle(),
+    supabase.from("user_trading_goals").select("*").eq("user_id", profile.id),
     supabase
       .from("user_trading_rules")
       .select("*")
       .eq("user_id", profile.id)
       .order("sort_order")
       .order("created_at"),
+    supabase
+      .from("trading_accounts")
+      .select("id, name, is_default, broker, account_type")
+      .eq("user_id", profile.id)
+      .order("is_default", { ascending: false })
+      .order("name"),
     supabase
       .from("trades")
       .select("*")
@@ -126,7 +134,8 @@ export default async function ToolsPage({
             <p className="text-muted text-sm mt-1">{description}</p>
           </div>
           <GoalsDashboard
-            initialGoals={(goals as UserTradingGoals | null) ?? null}
+            accounts={(accounts ?? []) as TradingAccount[]}
+            initialGoalsList={(goals ?? []) as UserTradingGoals[]}
             initialRules={(rules ?? []) as UserTradingRule[]}
             trades={(trades ?? []) as Trade[]}
             journals={(journals ?? []) as DailyJournalEntry[]}
