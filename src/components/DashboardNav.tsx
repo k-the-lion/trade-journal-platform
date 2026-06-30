@@ -9,7 +9,7 @@ const links = [
   { href: "/journal", label: "Daily" },
   { href: "/calendar", label: "Calendar" },
   { href: "/reports", label: "Reports" },
-  { href: "/planner", label: "Planner" },
+  { href: "/tools", label: "Tools" },
   { href: "/chat", label: "AI Coach" },
   { href: "/import", label: "Import" },
   { href: "/coach", label: "Coach" },

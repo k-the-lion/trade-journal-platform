@@ -4,7 +4,7 @@ import { useState } from "react";
 import { CsvImportForm } from "@/components/CsvImportForm";
 import { TopstepXSyncPanel } from "@/components/TopstepXSyncPanel";
 import { TradovateSyncPanel } from "@/components/TradovateSyncPanel";
-import type { ImportAdapter } from "@/lib/imports";
+import type { ImportAdapterInfo } from "@/lib/imports";
 import type { BrokerSyncConnectionPublic } from "@/lib/types/database";
 
 type Tab = "csv" | "topstepx" | "tradovate";
@@ -31,7 +31,7 @@ function ImportHelpCard({
   );
 }
 
-function SupportedCsvFormats({ adapters }: { adapters: ImportAdapter[] }) {
+function SupportedCsvFormats({ adapters }: { adapters: ImportAdapterInfo[] }) {
   return (
     <div className="card p-5 space-y-3 max-w-2xl">
       <h2 className="font-medium text-sm">Supported CSV formats</h2>
@@ -69,7 +69,7 @@ export function ImportTabs({
   tradovateConnections: BrokerSyncConnectionPublic[];
   tradovateOAuthConfigured: boolean;
   tradovateOAuthRedirectUri: string;
-  adapters: ImportAdapter[];
+  adapters: ImportAdapterInfo[];
 }) {
   const [tab, setTab] = useState<Tab>("csv");
 

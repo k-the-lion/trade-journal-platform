@@ -32,8 +32,10 @@ export {
 export { parseCsvRows, findPnlColumn } from "./csv-utils";
 export {
   type ImportAdapter,
+  type ImportAdapterInfo,
   type NormalizedTradeRow,
   normalizedToTradeInput,
   getImportAdapter,
   listImportAdapters,
+  listImportAdapterInfo,
 } from "./adapter";

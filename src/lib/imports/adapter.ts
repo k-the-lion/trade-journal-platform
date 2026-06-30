@@ -67,6 +67,17 @@ export function listImportAdapters(): ImportAdapter[] {
   return [...new Set(adapters.values())];
 }
 
+/** Serializable adapter metadata for client UI (no parse functions). */
+export type ImportAdapterInfo = Pick<ImportAdapter, "source" | "name" | "supportedFields">;
+
+export function listImportAdapterInfo(): ImportAdapterInfo[] {
+  return listImportAdapters().map(({ source, name, supportedFields }) => ({
+    source,
+    name,
+    supportedFields,
+  }));
+}
+
 export function listImportAdapterKeys(): string[] {
   return [...adapters.keys()];
 }

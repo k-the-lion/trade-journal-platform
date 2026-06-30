@@ -1,6 +1,6 @@
 import { createClient, getProfile } from "@/lib/supabase/server";
 import { ImportTabs } from "@/components/ImportTabs";
-import { listImportAdapters } from "@/lib/imports";
+import { listImportAdapterInfo } from "@/lib/imports";
 import {
   getTradovateOAuthRedirectUri,
   isTradovateOAuthConfigured,
@@ -25,7 +25,7 @@ async function getOrgOptions(userId: string) {
 export default async function ImportPage() {
   const profile = await getProfile();
   const orgOptions = await getOrgOptions(profile!.id);
-  const adapters = listImportAdapters();
+  const adapters = listImportAdapterInfo();
 
   const supabase = await createClient();
   const [{ data: jobs }, { data: accounts }, { data: strategies }, { data: connections }] =
