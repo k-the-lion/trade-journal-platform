@@ -35,6 +35,7 @@ const PRESET_OPTIONS: { value: ImportPreset; label: string }[] = [
   { value: "topstepx", label: "TopStep X (Trades export)" },
   { value: "tradovate_orders", label: "Tradovate (Orders)" },
   { value: "tradingview_orders", label: "TradingView (Order History)" },
+  { value: "tradingview_strategy_tester", label: "TradingView (Strategy Tester)" },
   { value: "generic", label: "Generic CSV / spreadsheet" },
 ];
 
@@ -46,6 +47,8 @@ const EXPORT_GUIDES: Record<ImportPreset, string> = {
     "Tradovate → Reports → Orders tab → Download CSV. We pair buy/sell fills into round trips with P&L.",
   tradingview_orders:
     "TradingView → Paper Trading panel → Order History tab → ⋯ enable all columns → Export data. We pair fills into round trips with P&L.",
+  tradingview_strategy_tester:
+    "TradingView → Strategy Tester → List of Trades tab → Export CSV. Backtest trades with entry/exit times and P&L (symbol is read from the filename).",
   generic: "Any CSV with date, symbol, and P&L columns. Map columns below if needed.",
 };
 
@@ -193,7 +196,8 @@ export function CsvImportForm({
         orgId || null,
         preset,
         accountId || null,
-        importStrategy || null
+        importStrategy || null,
+        fileName
       );
       setResult(res);
     } catch (err) {

@@ -6,6 +6,7 @@ export type ImportPreset =
   | "topstepx"
   | "tradovate_orders"
   | "tradingview_orders"
+  | "tradingview_strategy_tester"
   | "generic";
 
 export interface DetectedFormat {
@@ -22,7 +23,7 @@ function looksLikeTradingView(headers: string[]): boolean {
   return (
     (has(["Symbol"]) || has(["Ticker"]) || has(["Action"])) &&
     (has(["Side", "B/S", "Buy/Sell"]) ||
-      has(["Trade #", "Trade#"]) ||
+      has(["Trade #", "Trade#", "Trade number", "Trade Number"]) ||
       has(["P&L", "PnL", "Net P&L", "Realized PnL (value)", "Realized PnL"]) ||
       has(["Text"]))
   );
@@ -170,6 +171,24 @@ export function detectImportFormat(csvText: string): DetectedFormat {
     };
   }
 
+  // Strategy Tester — List of Trades (Trade number + Entry/Exit rows)
+  if (
+    has(["Trade number", "Trade #", "Trade#", "Trade Number"]) &&
+    has(["Type"]) &&
+    rows.some((row) => {
+      const typeCol = findColumn(headers, ["Type"])!;
+      const type = row[typeCol]?.toLowerCase() ?? "";
+      return type.includes("entry") || type.includes("exit");
+    })
+  ) {
+    return {
+      preset: "tradingview_strategy_tester",
+      source: "csv",
+      label: "TradingView (Strategy Tester)",
+      confidence: "high",
+    };
+  }
+
   // Ambiguous Symbol + P&L without order columns — likely Balance History
   if (
     (has(["Symbol"]) || has(["Ticker"])) &&
@@ -190,13 +209,10 @@ export function detectImportFormat(csvText: string): DetectedFormat {
   // Strategy Tester list of trades
   if (has(["Trade #", "Trade#"]) && has(["Type"])) {
     return {
-      preset: "generic",
+      preset: "tradingview_strategy_tester",
       source: "csv",
       label: "TradingView (Strategy Tester)",
       confidence: "medium",
-      unsupported: true,
-      unsupportedReason:
-        "Strategy Tester exports are not supported here. For paper trading, export Order History from the Paper Trading panel instead.",
     };
   }
 
@@ -228,6 +244,7 @@ export function presetToAdapterKey(preset: ImportPreset): string {
     case "tradovate_orders":
       return "tradovate";
     case "tradingview_orders":
+    case "tradingview_strategy_tester":
       return "tradingview";
     default:
       return "csv";

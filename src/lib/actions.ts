@@ -10,6 +10,7 @@ import { isAllowedChartLink, normalizeChartLink } from "@/lib/screenshots";
 import { resolveStrategyFields } from "@/lib/strategies/sync";
 import { STRATEGY_TEMPLATES } from "@/lib/constants/strategies";
 import { persistImportedTrades } from "@/lib/imports/persist";
+import { parseStrategyTesterFilename } from "@/lib/imports/strategy-tester-meta";
 import { getImportAdapter } from "@/lib/imports/adapter";
 import {
   parseCsvTrades,
@@ -854,7 +855,8 @@ export async function importCsvTrades(
   orgId?: string | null,
   preset: ImportPreset = "auto",
   accountId?: string | null,
-  defaultStrategyId?: string | null
+  defaultStrategyId?: string | null,
+  fileName?: string | null
 ) {
   const supabase = await createClient();
   const profile = await getProfile();
@@ -871,6 +873,11 @@ export async function importCsvTrades(
     parseOptions.mode = "orders";
   } else if (effectivePreset === "tradingview_orders") {
     parseOptions.mode = "orders";
+  } else if (effectivePreset === "tradingview_strategy_tester") {
+    parseOptions.mode = "strategy_tester";
+    const meta = fileName ? parseStrategyTesterFilename(fileName) : {};
+    if (meta.symbol) parseOptions.defaultSymbol = meta.symbol;
+    if (meta.strategyName) parseOptions.strategyName = meta.strategyName;
   }
 
   const result =

@@ -15,12 +15,14 @@ export type TradingViewMode =
   | "balance"
   | "orders"
   | "journal"
-  | "list_of_trades";
+  | "list_of_trades"
+  | "strategy_tester";
 
 export type TradingViewExportKind =
   | "balance_history"
   | "balance_ledger"
   | "order_history"
+  | "strategy_tester"
   | "trading_journal"
   | "activity_log"
   | "positions"
@@ -81,6 +83,18 @@ export function classifyTradingViewExport(
       message:
         "This looks like TradingView Positions (open positions). Export Balance History or Order History instead — completed trades with P&L.",
     };
+  }
+
+  if (
+    has(["Trade number", "Trade #", "Trade#", "Trade Number"]) &&
+    has(["Type"]) &&
+    rows.some((row) => {
+      const typeCol = findColumn(headers, ["Type"])!;
+      const type = row[typeCol]?.toLowerCase() ?? "";
+      return type.includes("entry") || type.includes("exit");
+    })
+  ) {
+    return { kind: "strategy_tester" };
   }
 
   if (
@@ -371,28 +385,44 @@ function parseBalanceOrJournalRows(
   return { rows: result, errors, skipped };
 }
 
-/** TradingView Trading journal / List of Trades (Entry + Exit rows) */
+/** TradingView Strategy Tester / List of Trades (Entry + Exit rows) */
 function parseListOfTrades(
   headers: string[],
   rows: Record<string, string>[],
-  errors: string[]
+  errors: string[],
+  options?: {
+    defaultSymbol?: string;
+    strategyName?: string;
+    isStrategyTester?: boolean;
+  }
 ): ImportAdapterResult {
   const col = {
-    tradeNum: findColumn(headers, ["Trade #", "Trade#", "Trade Number"]),
+    tradeNum: findColumn(headers, [
+      "Trade number",
+      "Trade #",
+      "Trade#",
+      "Trade Number",
+    ]),
     symbol: findColumn(headers, ["Symbol", "Ticker", "Instrument"]),
     type: findColumn(headers, ["Type"]),
     time: findColumn(headers, [
       "Date and time",
       "Date/Time",
-      "Date/Time",
       "Time",
       "Date",
       "Closing Time",
     ]),
-    price: findColumn(headers, ["Price", "Fill Price"]),
-    qty: findColumn(headers, ["Qty", "Quantity", "Contracts", "Size"]),
+    price: findColumn(headers, ["Price USD", "Price", "Fill Price"]),
+    qty: findColumn(headers, [
+      "Size (qty)",
+      "Qty",
+      "Quantity",
+      "Contracts",
+      "Size",
+    ]),
     pnl: findPnlColumn(headers),
-    id: findColumn(headers, ["Trade #", "Order ID"]),
+    signal: findColumn(headers, ["Signal"]),
+    id: findColumn(headers, ["Trade #", "Trade number", "Order ID"]),
   };
 
   if (!col.tradeNum || !col.type) {
@@ -400,7 +430,9 @@ function parseListOfTrades(
       rows: [],
       errors: [
         ...errors,
-        "Not a Trading journal export (missing Trade # / Type columns). Use Balance History instead.",
+        options?.isStrategyTester
+          ? "Not a Strategy Tester export (missing Trade number / Type columns)."
+          : "Not a Trading journal export (missing Trade # / Type columns). Use Order History instead.",
       ],
       skipped: rows.length,
     };
@@ -455,6 +487,10 @@ function parseListOfTrades(
       return;
     }
 
+    const entryTimeRaw =
+      entryRow && col.time ? entryRow[col.time] : undefined;
+    const entry_at = entryTimeRaw ? parseDate(entryTimeRaw) : null;
+
     const type = col.type ? exitRow[col.type]?.toLowerCase() ?? "" : "";
     const direction = type.includes("short") ? "short" : "long";
     const entryPrice =
@@ -470,25 +506,40 @@ function parseListOfTrades(
     const symbolRaw =
       pair.symbol ||
       (col.symbol ? exitRow[col.symbol!] : undefined) ||
-      (entryRow && col.symbol ? entryRow[col.symbol!] : undefined);
+      (entryRow && col.symbol ? entryRow[col.symbol!] : undefined) ||
+      options?.defaultSymbol;
+
+    const signal = col.signal ? exitRow[col.signal]?.trim() : "";
+    const importNotes = [
+      options?.isStrategyTester ? "Strategy Tester backtest" : null,
+      options?.strategyName ? `Strategy: ${options.strategyName}` : null,
+      signal ? `Exit signal: ${signal}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
 
     result.push({
       traded_at,
+      entry_at,
       symbol: symbolRaw ? normalizeSymbol(symbolRaw) : "UNKNOWN",
       direction,
       entry_price: entryPrice,
       exit_price: exitPrice,
       quantity: Math.abs(qty),
       pnl,
-      setup_tag: "TradingView",
-      notes: null,
-      external_id: `tv-trade-${tradeNum}`,
+      setup_tag: options?.isStrategyTester ? "Strategy Tester" : "TradingView",
+      import_notes: importNotes || null,
+      external_id: options?.isStrategyTester
+        ? `tv-st-${tradeNum}`
+        : `tv-trade-${tradeNum}`,
     });
   });
 
   if (result.length === 0) {
     errors.push(
-      "No completed trades found in Trading journal export. Balance History is the easiest import."
+      options?.isStrategyTester
+        ? "No completed trades found in Strategy Tester export."
+        : "No completed trades found in Trading journal export. Use Order History instead."
     );
   }
 
@@ -653,6 +704,8 @@ function detectMode(headers: string[], rows: Record<string, string>[]): TradingV
     case "balance_ledger":
     case "balance_history":
       return "balance";
+    case "strategy_tester":
+      return "strategy_tester";
     case "trading_journal":
       return "journal";
     case "order_history":
@@ -666,10 +719,10 @@ function detectMode(headers: string[], rows: Record<string, string>[]): TradingV
   }
 
   if (
-    findColumn(headers, ["Trade #", "Trade#"]) &&
+    findColumn(headers, ["Trade number", "Trade #", "Trade#"]) &&
     findColumn(headers, ["Type"])
   ) {
-    return "journal";
+    return "strategy_tester";
   }
 
   if (
@@ -691,7 +744,8 @@ function detectMode(headers: string[], rows: Record<string, string>[]): TradingV
 
 export function parseTradingViewCsv(
   csvText: string,
-  mode: TradingViewMode = "auto"
+  mode: TradingViewMode = "auto",
+  options?: Record<string, unknown>
 ): ImportAdapterResult {
   const { headers, rows, errors } = parseCsvRows(csvText);
   const classified = classifyTradingViewExport(headers, rows);
@@ -731,9 +785,16 @@ export function parseTradingViewCsv(
   }
 
   switch (effective) {
+    case "strategy_tester":
     case "journal":
     case "list_of_trades":
-      return parseListOfTrades(headers, rows, errors);
+      return parseListOfTrades(headers, rows, errors, {
+        defaultSymbol: options?.defaultSymbol as string | undefined,
+        strategyName: options?.strategyName as string | undefined,
+        isStrategyTester:
+          effective === "strategy_tester" ||
+          classified.kind === "strategy_tester",
+      });
     case "orders":
       return parseOrderHistory(headers, rows, errors);
     default:
@@ -773,6 +834,6 @@ export const tradingviewImportAdapter: ImportAdapter = {
   parse(input, options) {
     const text = typeof input === "string" ? input : "";
     const mode = (options?.mode as TradingViewMode) ?? "orders";
-    return parseTradingViewCsv(text, mode);
+    return parseTradingViewCsv(text, mode, options);
   },
 };
