@@ -258,6 +258,8 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   eval: "Eval",
   funded: "Funded",
   personal: "Personal",
+  live: "Live",
+  paper: "Paper",
 };
 
 export function breakdownByAccountType(trades: Trade[]): BreakdownItem[] {

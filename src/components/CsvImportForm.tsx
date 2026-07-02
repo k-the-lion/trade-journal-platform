@@ -14,6 +14,7 @@ import {
   type CsvColumnMapping,
   type ImportPreset,
 } from "@/lib/imports";
+import { ACCOUNT_TYPE_OPTIONS } from "@/lib/constants/account-types";
 
 const FIELD_OPTIONS = [
   "traded_at",
@@ -276,9 +277,9 @@ export function CsvImportForm({
               onChange={(e) => setNewAccountType(e.target.value)}
             >
               <option value="">Type —</option>
-              <option value="eval">Eval</option>
-              <option value="funded">Funded</option>
-              <option value="personal">Personal</option>
+              {ACCOUNT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
             <button
               type="button"

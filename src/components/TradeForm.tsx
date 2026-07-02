@@ -8,6 +8,7 @@ import { MoodPicker } from "@/components/MoodPicker";
 import { TradeTimingDetails } from "@/components/TradeTimeLabel";
 import { displayImportNotes, displayJournalNotes } from "@/lib/trades/import-notes";
 import type { AccountType, Trade, TradeDirection, TradingStrategy } from "@/lib/types/database";
+import { ACCOUNT_TYPE_OPTIONS } from "@/lib/constants/account-types";
 
 interface TradeFormProps {
   trade?: Trade;
@@ -134,9 +135,9 @@ export function TradeForm({
             <label className="label" htmlFor="account_type">Account type</label>
             <select id="account_type" name="account_type" className="input" defaultValue={trade?.account_type ?? ""}>
               <option value="">—</option>
-              <option value="eval">Eval</option>
-              <option value="funded">Funded</option>
-              <option value="personal">Personal</option>
+              {ACCOUNT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
             </select>
           </div>
         )}

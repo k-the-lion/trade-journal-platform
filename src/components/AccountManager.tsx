@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { createTradingAccount, updateTradingAccount } from "@/lib/actions";
+import {
+  createTradingAccount,
+  deleteTradingAccount,
+  updateTradingAccount,
+} from "@/lib/actions";
+import {
+  ACCOUNT_TYPE_LABELS,
+  ACCOUNT_TYPE_OPTIONS,
+} from "@/lib/constants/account-types";
 import type { AccountType, TradingAccount } from "@/lib/types/database";
-
-const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-  eval: "Eval",
-  funded: "Funded",
-  personal: "Personal",
-};
 
 export function AccountManager({
   accounts,
@@ -94,6 +96,28 @@ export function AccountManager({
     });
   }
 
+  function handleDelete(account: TradingAccount) {
+    const confirmed = window.confirm(
+      `Delete "${account.name}"?\n\nTrades on this account will stay in your journal but become unassigned. Goals for this account will be removed. Broker sync connections linked to it will be unlinked.`
+    );
+    if (!confirmed) return;
+
+    setError(null);
+    startTransition(async () => {
+      try {
+        await deleteTradingAccount(account.id);
+        let next = accounts.filter((a) => a.id !== account.id);
+        if (account.is_default && next.length > 0) {
+          next = next.map((a, i) => (i === 0 ? { ...a, is_default: true } : a));
+        }
+        onAccountsChange(next);
+        if (editingId === account.id) setEditingId(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to delete account");
+      }
+    });
+  }
+
   const wrapperClass =
     variant === "settings"
       ? "space-y-3"
@@ -150,9 +174,11 @@ export function AccountManager({
                     onChange={(e) => setNewType(e.target.value as AccountType | "")}
                   >
                     <option value="">—</option>
-                    <option value="eval">Eval</option>
-                    <option value="funded">Funded</option>
-                    <option value="personal">Personal</option>
+                    {ACCOUNT_TYPE_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <label className="flex items-center gap-2 text-sm self-end pb-2">
@@ -225,9 +251,11 @@ export function AccountManager({
                   defaultValue={account.account_type ?? ""}
                 >
                   <option value="">—</option>
-                  <option value="eval">Eval</option>
-                  <option value="funded">Funded</option>
-                  <option value="personal">Personal</option>
+                  {ACCOUNT_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
                 </select>
               </div>
               <label className="text-xs text-muted flex items-center gap-1.5 shrink-0 pb-2">
@@ -269,13 +297,23 @@ export function AccountManager({
                   ★ Default
                 </span>
               )}
-              <button
-                type="button"
-                className="text-xs text-primary hover:underline ml-auto"
-                onClick={() => setEditingId(account.id)}
-              >
-                Edit
-              </button>
+              <div className="flex items-center gap-3 ml-auto">
+                <button
+                  type="button"
+                  className="text-xs text-primary hover:underline"
+                  onClick={() => setEditingId(account.id)}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-danger hover:underline"
+                  onClick={() => handleDelete(account)}
+                  disabled={pending}
+                >
+                  Delete
+                </button>
+              </div>
             </>
           )}
         </div>

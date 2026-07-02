@@ -119,6 +119,55 @@ export async function updateTradingAccount(
   return account;
 }
 
+export async function deleteTradingAccount(id: string) {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { data: account } = await supabase
+    .from("trading_accounts")
+    .select("id, is_default")
+    .eq("id", id)
+    .eq("user_id", profile.id)
+    .single();
+
+  if (!account) throw new Error("Account not found");
+
+  if (account.is_default) {
+    const { data: fallback } = await supabase
+      .from("trading_accounts")
+      .select("id")
+      .eq("user_id", profile.id)
+      .neq("id", id)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (fallback) {
+      await supabase
+        .from("trading_accounts")
+        .update({ is_default: true })
+        .eq("id", fallback.id)
+        .eq("user_id", profile.id);
+    }
+  }
+
+  const { error } = await supabase
+    .from("trading_accounts")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", profile.id);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/import");
+  revalidatePath("/reports");
+  revalidatePath("/trades");
+  revalidatePath("/settings");
+  revalidatePath("/tools");
+}
+
 export async function upsertDailyJournalEntry(data: {
   journal_date: string;
   mood?: string | null;

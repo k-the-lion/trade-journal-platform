@@ -1,7 +1,7 @@
 export type PlatformRole = "admin" | "coach" | "student" | "solo";
 export type OrgMemberRole = "coach" | "student";
 export type TradeDirection = "long" | "short";
-export type AccountType = "eval" | "funded" | "personal";
+export type AccountType = "eval" | "funded" | "personal" | "live" | "paper";
 export type TradeSource = "manual" | "csv" | "tradovate" | "ninjatrader" | "tradingview" | "topstepx" | "other";
 export type ImportSource = "csv" | "tradovate" | "ninjatrader" | "tradingview" | "topstepx" | "other";
 export type ImportStatus = "pending" | "processing" | "completed" | "failed";
