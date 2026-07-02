@@ -17,10 +17,13 @@ export function TagPicker({
   value,
   onChange,
   presets,
+  presetsPosition = "above",
 }: {
   value: string;
   onChange: (value: string) => void;
   presets: TradingTagPreset[];
+  /** Put quick-pick chips below the text field so paired controls can align in a grid. */
+  presetsPosition?: "above" | "below";
 }) {
   const selected = parseTags(value);
 
@@ -31,29 +34,32 @@ export function TagPicker({
     onChange(joinTags(next));
   }
 
+  const presetButtons =
+    presets.length > 0 ? (
+      <div className="flex flex-wrap gap-1.5">
+        {presets.map((p) => {
+          const active = selected.includes(p.name);
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => toggleTag(p.name)}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                active
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border text-muted hover:border-primary/40"
+              }`}
+            >
+              {p.name}
+            </button>
+          );
+        })}
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-2">
-      {presets.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {presets.map((p) => {
-            const active = selected.includes(p.name);
-            return (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => toggleTag(p.name)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  active
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted hover:border-primary/40"
-                }`}
-              >
-                {p.name}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      {presetsPosition === "above" && presetButtons}
       <input
         className="input"
         value={value}
@@ -64,6 +70,7 @@ export function TagPicker({
             : "e.g. 1:2 R:R, London open — or save tags on Strategies"
         }
       />
+      {presetsPosition === "below" && presetButtons}
       {selected.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {selected.map((tag) => (

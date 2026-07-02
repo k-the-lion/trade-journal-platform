@@ -846,14 +846,18 @@ function TradeJournalRow({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-            <div>
-              <label className="label">Strategy</label>
-              <p className="text-xs text-muted mb-1.5 sm:min-h-[2.5rem]">
-                Which setup or playbook this trade followed
-              </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 items-start">
+            <label className="label sm:col-start-1 sm:row-start-1">Strategy</label>
+            <label className="label sm:col-start-2 sm:row-start-1">Extra tags</label>
+            <p className="text-xs text-muted sm:col-start-1 sm:row-start-2 sm:min-h-[2.5rem]">
+              Which setup or playbook this trade followed
+            </p>
+            <p className="text-xs text-muted sm:col-start-2 sm:row-start-2 sm:min-h-[2.5rem]">
+              Quick labels for what you did (R:R, session, setup quality)
+            </p>
+            <div className="sm:col-start-1 sm:row-start-3">
               <select
-                className="input"
+                className="input w-full"
                 value={strategyId}
                 onChange={(e) => setStrategyId(e.target.value)}
               >
@@ -870,12 +874,13 @@ function TradeJournalRow({
                 </Link>
               )}
             </div>
-            <div>
-              <label className="label">Extra tags</label>
-              <p className="text-xs text-muted mb-1.5 sm:min-h-[2.5rem]">
-                Quick labels for what you did (R:R, session, setup quality)
-              </p>
-              <TagPicker value={tags} onChange={setTags} presets={tagPresets} />
+            <div className="sm:col-start-2 sm:row-start-3">
+              <TagPicker
+                value={tags}
+                onChange={setTags}
+                presets={tagPresets}
+                presetsPosition="below"
+              />
             </div>
           </div>
 
