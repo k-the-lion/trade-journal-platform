@@ -1,12 +1,24 @@
 import Link from "next/link";
 import { getProfile } from "@/lib/supabase/server";
+import { createClient } from "@/lib/supabase/server";
 import { getDashboardData } from "@/lib/dashboard/data";
+import { BrokerSyncRefresh } from "@/components/BrokerSyncRefresh";
 import { TradeJournalBoard } from "@/components/TradeJournalBoard";
 
 export default async function DashboardPage() {
   const profile = await getProfile();
+  const supabase = await createClient();
 
-  const { accounts, strategies, tagPresets, trades } = await getDashboardData(profile!.id);
+  const [{ accounts, strategies, tagPresets, trades }, { count: connectionCount }] =
+    await Promise.all([
+      getDashboardData(profile!.id),
+      supabase
+        .from("broker_sync_connections")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", profile!.id)
+        .eq("is_active", true)
+        .in("provider", ["topstepx", "tradovate"]),
+    ]);
 
   return (
     <div className="space-y-8">
@@ -19,9 +31,12 @@ export default async function DashboardPage() {
             Journal your trades, track strategies, and review performance by account
           </p>
         </div>
-        <Link href="/journal" className="btn btn-primary text-sm shrink-0">
-          Daily journal
-        </Link>
+        <div className="flex flex-wrap items-start gap-2 shrink-0">
+          <BrokerSyncRefresh connectionCount={connectionCount ?? 0} />
+          <Link href="/journal" className="btn btn-primary text-sm shrink-0">
+            Daily journal
+          </Link>
+        </div>
       </div>
 
       <TradeJournalBoard

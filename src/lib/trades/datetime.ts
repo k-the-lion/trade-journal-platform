@@ -12,6 +12,12 @@ const tradeTimeFormatter = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
 });
 
+const tradeTimeWithSecondsFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
 export function formatTradeDate(iso: string): string {
   return tradeDateFormatter.format(new Date(iso));
 }
@@ -20,32 +26,40 @@ export function formatTradeTime(iso: string): string {
   return tradeTimeFormatter.format(new Date(iso));
 }
 
+export function formatTradeTimeWithSeconds(iso: string): string {
+  return tradeTimeWithSecondsFormatter.format(new Date(iso));
+}
+
+/** Full line for trade detail views: "Thursday, June 24, 2026 · 2:15:40 PM" */
+export function formatTradeTimestampDetail(iso: string): string {
+  return `${formatTradeDate(iso)} · ${formatTradeTimeWithSeconds(iso)}`;
+}
+
 export function formatHoldDuration(entryAt: string, exitAt: string): string | null {
   const ms = new Date(exitAt).getTime() - new Date(entryAt).getTime();
   if (!Number.isFinite(ms) || ms < 0) return null;
 
-  const totalMins = Math.round(ms / 60_000);
-  if (totalMins < 1) return "<1m";
-  if (totalMins < 60) return `${totalMins}m`;
+  const totalSecs = Math.round(ms / 1000);
+  if (totalSecs < 1) return "<1 S";
 
-  const hrs = Math.floor(totalMins / 60);
-  const mins = totalMins % 60;
-  if (hrs < 24) return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+  const hours = Math.floor(totalSecs / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
 
-  const days = Math.floor(hrs / 24);
-  const remHrs = hrs % 24;
-  return remHrs > 0 ? `${days}d ${remHrs}h` : `${days}d`;
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours} H`);
+  if (mins > 0) parts.push(`${mins} M`);
+  if (secs > 0 || parts.length === 0) parts.push(`${secs} S`);
+
+  return parts.join(" ");
 }
 
 export function formatAvgHoldMinutes(minutes: number): string {
-  if (minutes < 1) return "<1m";
-  if (minutes < 60) return `${Math.round(minutes)}m`;
-  const hrs = Math.floor(minutes / 60);
-  const mins = Math.round(minutes % 60);
-  if (hrs < 24) return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
-  const days = Math.floor(hrs / 24);
-  const remHrs = hrs % 24;
-  return remHrs > 0 ? `${days}d ${remHrs}h` : `${days}d`;
+  const formatted = formatHoldDuration(
+    new Date(0).toISOString(),
+    new Date(Math.round(minutes * 60_000)).toISOString()
+  );
+  return formatted ?? "<1 S";
 }
 
 export function computeHoldStats(trades: Trade[]): {

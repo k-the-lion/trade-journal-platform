@@ -8,6 +8,7 @@ export interface PersistImportResult {
   imported: number;
   skipped: number;
   duplicatesSkipped: number;
+  backfilled: number;
   errors: string[];
   jobId: string;
 }
@@ -66,6 +67,7 @@ export async function persistImportedTrades(params: {
 
   let imported = 0;
   let duplicatesSkipped = 0;
+  let backfilled = 0;
   const insertErrors: string[] = [...parseErrors];
 
   for (const row of rows) {
@@ -76,15 +78,19 @@ export async function persistImportedTrades(params: {
 
     if (existingIds.has(externalId)) {
       if (tradeInput.entry_at) {
-        await supabase
+        const { data: updated } = await supabase
           .from("trades")
           .update({
             entry_at: tradeInput.entry_at,
             entry_price: tradeInput.entry_price ?? undefined,
+            exit_price: tradeInput.exit_price ?? undefined,
           })
           .eq("user_id", userId)
           .eq("external_id", externalId)
-          .is("entry_at", null);
+          .is("entry_at", null)
+          .select("id");
+
+        if (updated?.length) backfilled++;
       }
       duplicatesSkipped++;
       continue;
@@ -139,6 +145,7 @@ export async function persistImportedTrades(params: {
     imported,
     skipped: parseSkipped + duplicatesSkipped,
     duplicatesSkipped,
+    backfilled,
     errors: insertErrors,
     jobId: job.id,
   };

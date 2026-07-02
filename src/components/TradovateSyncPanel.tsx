@@ -223,10 +223,19 @@ export function TradovateSyncPanel({
         )
       );
       setMessage(
-        `Synced ${result.imported} new trade${result.imported === 1 ? "" : "s"}` +
-          (result.duplicatesSkipped > 0
-            ? ` (${result.duplicatesSkipped} duplicates skipped)`
-            : "")
+        [
+          result.imported > 0
+            ? `${result.imported} new trade${result.imported === 1 ? "" : "s"}`
+            : null,
+          result.backfilled > 0
+            ? `${result.backfilled} trade${result.backfilled === 1 ? "" : "s"} updated with entry time`
+            : null,
+          result.duplicatesSkipped > 0
+            ? `${result.duplicatesSkipped} duplicates skipped`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || "Up to date"
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");

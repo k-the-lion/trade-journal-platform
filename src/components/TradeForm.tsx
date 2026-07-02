@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createTrade, updateTrade } from "@/lib/actions";
 import { parseStrategyRules } from "@/lib/constants/strategies";
 import { MoodPicker } from "@/components/MoodPicker";
+import { TradeTimingDetails } from "@/components/TradeTimeLabel";
 import { displayImportNotes, displayJournalNotes } from "@/lib/trades/import-notes";
 import type { AccountType, Trade, TradeDirection, TradingStrategy } from "@/lib/types/database";
 
@@ -99,6 +100,8 @@ export function TradeForm({
           {error}
         </div>
       )}
+
+      {trade && <TradeTimingDetails trade={trade} variant="detail" />}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>

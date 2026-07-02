@@ -10,7 +10,8 @@ type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export async function runTradovateSyncForConnection(
   supabase: ServerClient,
-  connection: BrokerSyncConnection
+  connection: BrokerSyncConnection,
+  options?: { fullHistory?: boolean }
 ): Promise<PersistImportResult> {
   const creds = decryptJson<TradovateCredentials>(connection.credentials_encrypted);
   const { rows, updatedCreds } = await fetchTradovateTrades(
@@ -18,7 +19,8 @@ export async function runTradovateSyncForConnection(
     creds,
     Number(connection.external_account_id),
     connection.sync_from,
-    connection.last_synced_at
+    connection.last_synced_at,
+    options
   );
 
   const strategyFields = connection.strategy_id

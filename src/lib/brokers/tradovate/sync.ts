@@ -44,13 +44,16 @@ export async function fetchTradovateTrades(
   creds: TradovateCredentials,
   accountId: number,
   syncFrom?: string | null,
-  lastSyncedAt?: string | null
+  lastSyncedAt?: string | null,
+  options?: { fullHistory?: boolean }
 ): Promise<{ rows: NormalizedTradeRow[]; updatedCreds?: TradovateOAuthCredentials }> {
   const { token, updatedCreds } = await resolveTradovateAccessToken(username, creds);
 
   const end = new Date();
   let start: Date;
-  if (lastSyncedAt) {
+  if (options?.fullHistory) {
+    start = syncFrom ? new Date(syncFrom) : addDays(end, -DEFAULT_LOOKBACK_DAYS);
+  } else if (lastSyncedAt) {
     start = addDays(new Date(lastSyncedAt), -2);
   } else if (syncFrom) {
     start = new Date(syncFrom);

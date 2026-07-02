@@ -284,7 +284,8 @@ export async function syncTradovateConnection(connectionId: string) {
   try {
     const result = await runTradovateSyncForConnection(
       supabase,
-      connection as BrokerSyncConnection
+      connection as BrokerSyncConnection,
+      { fullHistory: true }
     );
 
     revalidatePath("/import");
@@ -321,7 +322,8 @@ export async function syncTopstepXConnection(connectionId: string) {
   try {
     const result = await runTopstepXSyncForConnection(
       supabase,
-      connection as BrokerSyncConnection
+      connection as BrokerSyncConnection,
+      { fullHistory: true }
     );
 
     revalidatePath("/import");
@@ -336,4 +338,75 @@ export async function syncTopstepXConnection(connectionId: string) {
     revalidatePath("/import");
     throw new Error(message);
   }
+}
+
+export type BrokerSyncRefreshResult = {
+  connectionId: string;
+  label: string;
+  provider: string;
+  imported: number;
+  backfilled: number;
+  skipped: number;
+  error?: string;
+};
+
+export async function syncAllBrokerConnections(): Promise<BrokerSyncRefreshResult[]> {
+  const supabase = await createClient();
+  const profile = await getProfile();
+  if (!profile) throw new Error("Not authenticated");
+
+  const { data: connections, error } = await supabase
+    .from("broker_sync_connections")
+    .select("*")
+    .eq("user_id", profile.id)
+    .eq("is_active", true)
+    .in("provider", ["topstepx", "tradovate"]);
+
+  if (error) throw new Error(error.message);
+
+  const results: BrokerSyncRefreshResult[] = [];
+
+  for (const row of connections ?? []) {
+    const connection = row as BrokerSyncConnection;
+    const label = connection.label || connection.external_account_name || connection.provider;
+
+    try {
+      const result =
+        connection.provider === "tradovate"
+          ? await runTradovateSyncForConnection(supabase, connection, { fullHistory: true })
+          : await runTopstepXSyncForConnection(supabase, connection, { fullHistory: true });
+
+      results.push({
+        connectionId: connection.id,
+        label,
+        provider: connection.provider,
+        imported: result.imported,
+        backfilled: result.backfilled,
+        skipped: result.skipped,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Sync failed";
+      if (connection.provider === "tradovate") {
+        await markTradovateSyncError(supabase, connection.id, message);
+      } else {
+        await markTopstepXSyncError(supabase, connection.id, message);
+      }
+      results.push({
+        connectionId: connection.id,
+        label,
+        provider: connection.provider,
+        imported: 0,
+        backfilled: 0,
+        skipped: 0,
+        error: message,
+      });
+    }
+  }
+
+  revalidatePath("/import");
+  revalidatePath("/trades");
+  revalidatePath("/dashboard");
+  revalidatePath("/reports");
+
+  return results;
 }

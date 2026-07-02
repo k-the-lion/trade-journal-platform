@@ -40,13 +40,16 @@ export async function fetchTopstepXTrades(
   apiKey: string,
   accountId: number,
   syncFrom?: string | null,
-  lastSyncedAt?: string | null
+  lastSyncedAt?: string | null,
+  options?: { fullHistory?: boolean }
 ): Promise<NormalizedTradeRow[]> {
   const token = await topstepxLoginWithFallback(username, apiKey);
 
   const end = new Date();
   let start: Date;
-  if (lastSyncedAt) {
+  if (options?.fullHistory) {
+    start = syncFrom ? new Date(syncFrom) : addDays(end, -DEFAULT_LOOKBACK_DAYS);
+  } else if (lastSyncedAt) {
     start = addDays(new Date(lastSyncedAt), -2);
   } else if (syncFrom) {
     start = new Date(syncFrom);

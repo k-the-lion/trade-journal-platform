@@ -9,7 +9,8 @@ type ServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export async function runTopstepXSyncForConnection(
   supabase: ServerClient,
-  connection: BrokerSyncConnection
+  connection: BrokerSyncConnection,
+  options?: { fullHistory?: boolean }
 ): Promise<PersistImportResult> {
   const { apiKey } = decryptJson<{ apiKey: string }>(connection.credentials_encrypted);
   const rows = await fetchTopstepXTrades(
@@ -17,7 +18,8 @@ export async function runTopstepXSyncForConnection(
     apiKey,
     Number(connection.external_account_id),
     connection.sync_from,
-    connection.last_synced_at
+    connection.last_synced_at,
+    options
   );
 
   const strategyFields = connection.strategy_id
