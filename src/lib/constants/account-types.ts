@@ -9,9 +9,9 @@ export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
 };
 
 export const ACCOUNT_TYPE_OPTIONS: { value: AccountType; label: string }[] = [
+  { value: "paper", label: "Paper" },
   { value: "eval", label: "Eval" },
   { value: "funded", label: "Funded" },
-  { value: "personal", label: "Personal" },
   { value: "live", label: "Live" },
-  { value: "paper", label: "Paper" },
+  { value: "personal", label: "Personal" },
 ];
