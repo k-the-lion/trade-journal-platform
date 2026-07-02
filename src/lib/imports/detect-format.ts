@@ -5,9 +5,7 @@ export type ImportPreset =
   | "auto"
   | "topstepx"
   | "tradovate_orders"
-  | "tradingview_balance"
   | "tradingview_orders"
-  | "tradingview_journal"
   | "generic";
 
 export interface DetectedFormat {
@@ -110,19 +108,25 @@ export function detectImportFormat(csvText: string): DetectedFormat {
 
     if (tv.kind === "balance_ledger" || tv.kind === "balance_history") {
       return {
-        preset: "tradingview_balance",
+        preset: "generic",
         source: "csv",
         label: "TradingView (Balance History)",
         confidence: "high",
+        unsupported: true,
+        unsupportedReason:
+          "This looks like a TradingView Balance History export. Use Order History instead: Paper Trading panel → Order History tab → ⋯ enable all columns → Export data.",
       };
     }
 
     if (tv.kind === "trading_journal") {
       return {
-        preset: "tradingview_journal",
+        preset: "generic",
         source: "csv",
         label: "TradingView (Trading journal)",
         confidence: "high",
+        unsupported: true,
+        unsupportedReason:
+          "This looks like a TradingView Trading journal or Strategy Tester export. Use Order History instead: Paper Trading panel → Order History tab → ⋯ enable all columns → Export data.",
       };
     }
 
@@ -136,44 +140,23 @@ export function detectImportFormat(csvText: string): DetectedFormat {
     }
   }
 
-  // TradingView Balance History ledger (Paper Trading — Action column)
+  // TradingView Balance History — use Order History instead
   if (
     has(["Action"]) &&
     has(["Realized PnL (value)", "Realized PnL", "Realized PNL"])
   ) {
     return {
-      preset: "tradingview_balance",
+      preset: "generic",
       source: "csv",
       label: "TradingView (Balance History)",
       confidence: "high",
+      unsupported: true,
+      unsupportedReason:
+        "This looks like a TradingView Balance History export. Use Order History instead: Paper Trading panel → Order History tab → ⋯ enable all columns → Export data.",
     };
   }
 
-  // TradingView Balance History / round trips with Symbol + P&L columns
-  if (
-    (has(["Symbol"]) || has(["Ticker"])) &&
-    has(["P&L", "PnL", "Net P&L", "Profit"]) &&
-    !has(["ContractName"])
-  ) {
-    return {
-      preset: "tradingview_balance",
-      source: "csv",
-      label: "TradingView (Balance History)",
-      confidence: "high",
-    };
-  }
-
-  // TradingView Trading journal (list of trades)
-  if (has(["Trade #", "Trade#"]) && has(["Type"])) {
-    return {
-      preset: "tradingview_journal",
-      source: "csv",
-      label: "TradingView (Trading journal)",
-      confidence: "medium",
-    };
-  }
-
-  // TradingView Order History
+  // TradingView Order History (check before generic Symbol + P&L)
   if (
     (has(["Symbol"]) || has(["Ticker"])) &&
     has(["Side", "B/S", "Buy/Sell"]) &&
@@ -187,6 +170,36 @@ export function detectImportFormat(csvText: string): DetectedFormat {
     };
   }
 
+  // Ambiguous Symbol + P&L without order columns — likely Balance History
+  if (
+    (has(["Symbol"]) || has(["Ticker"])) &&
+    has(["P&L", "PnL", "Net P&L", "Profit"]) &&
+    !has(["ContractName"])
+  ) {
+    return {
+      preset: "generic",
+      source: "csv",
+      label: "TradingView (Balance History)",
+      confidence: "medium",
+      unsupported: true,
+      unsupportedReason:
+        "This file looks like Balance History or a summary export. Use Order History instead: Paper Trading panel → Order History tab → ⋯ enable all columns → Export data.",
+    };
+  }
+
+  // Strategy Tester list of trades
+  if (has(["Trade #", "Trade#"]) && has(["Type"])) {
+    return {
+      preset: "generic",
+      source: "csv",
+      label: "TradingView (Strategy Tester)",
+      confidence: "medium",
+      unsupported: true,
+      unsupportedReason:
+        "Strategy Tester exports are not supported here. For paper trading, export Order History from the Paper Trading panel instead.",
+    };
+  }
+
   // TradingView Trading journal activity log (Paper Trading tab)
   if (has(["Text"]) && has(["Time"]) && !has(["Symbol", "Ticker"])) {
     return {
@@ -196,7 +209,7 @@ export function detectImportFormat(csvText: string): DetectedFormat {
       confidence: "high",
       unsupported: true,
       unsupportedReason:
-        "TradingView Trading journal is an activity log, not trade data. Export Balance History (best) or Order History instead.",
+        "TradingView Trading journal is an activity log, not trade data. Export Order History from the Paper Trading panel instead.",
     };
   }
 
@@ -214,9 +227,7 @@ export function presetToAdapterKey(preset: ImportPreset): string {
       return "topstepx";
     case "tradovate_orders":
       return "tradovate";
-    case "tradingview_balance":
     case "tradingview_orders":
-    case "tradingview_journal":
       return "tradingview";
     default:
       return "csv";

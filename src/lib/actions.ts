@@ -871,10 +871,6 @@ export async function importCsvTrades(
     parseOptions.mode = "orders";
   } else if (effectivePreset === "tradingview_orders") {
     parseOptions.mode = "orders";
-  } else if (effectivePreset === "tradingview_balance") {
-    parseOptions.mode = "balance";
-  } else if (effectivePreset === "tradingview_journal") {
-    parseOptions.mode = "journal";
   }
 
   const result =

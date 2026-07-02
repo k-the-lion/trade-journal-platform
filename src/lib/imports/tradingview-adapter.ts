@@ -68,7 +68,7 @@ export function classifyTradingViewExport(
     return {
       kind: "activity_log",
       message:
-        "TradingView Trading journal is an activity log, not trade data. Export Balance History (best) or Order History instead.",
+        "TradingView Trading journal is an activity log, not trade data. Export Order History from the Paper Trading panel instead.",
     };
   }
 
@@ -746,7 +746,7 @@ export function parseTradingViewCsv(
 
 export const tradingviewImportAdapter: ImportAdapter = {
   source: "tradingview",
-  name: "TradingView CSV",
+  name: "TradingView (Order History CSV)",
   supportedFields: [
     "Symbol",
     "Side",
@@ -772,7 +772,7 @@ export const tradingviewImportAdapter: ImportAdapter = {
   ],
   parse(input, options) {
     const text = typeof input === "string" ? input : "";
-    const mode = (options?.mode as TradingViewMode) ?? "auto";
+    const mode = (options?.mode as TradingViewMode) ?? "orders";
     return parseTradingViewCsv(text, mode);
   },
 };

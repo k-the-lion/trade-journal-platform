@@ -34,9 +34,7 @@ const PRESET_OPTIONS: { value: ImportPreset; label: string }[] = [
   { value: "auto", label: "Auto-detect" },
   { value: "topstepx", label: "TopStep X (Trades export)" },
   { value: "tradovate_orders", label: "Tradovate (Orders)" },
-  { value: "tradingview_balance", label: "TradingView (Balance History)" },
   { value: "tradingview_orders", label: "TradingView (Order History)" },
-  { value: "tradingview_journal", label: "TradingView (Trading journal)" },
   { value: "generic", label: "Generic CSV / spreadsheet" },
 ];
 
@@ -46,12 +44,8 @@ const EXPORT_GUIDES: Record<ImportPreset, string> = {
     "TopStep X → bottom Trades tab → Export → pick date range → download CSV. Don't edit the file.",
   tradovate_orders:
     "Tradovate → Reports → Orders tab → Download CSV. We pair buy/sell fills into round trips with P&L.",
-  tradingview_balance:
-    "TradingView → Paper Trading panel → Balance History tab → Export data. Each row is a closed trade with realized P&L.",
   tradingview_orders:
-    "TradingView → Order History tab → ⋯ enable all columns → Export data. We pair buy/sell fills into round trips.",
-  tradingview_journal:
-    "Strategy Tester “List of Trades” export only (Trade # + Type columns). The Paper Trading Trading journal tab is an activity log — use Balance History instead.",
+    "TradingView → Paper Trading panel → Order History tab → ⋯ enable all columns → Export data. We pair fills into round trips with P&L.",
   generic: "Any CSV with date, symbol, and P&L columns. Map columns below if needed.",
 };
 
