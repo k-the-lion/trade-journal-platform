@@ -11,7 +11,9 @@ export interface NormalizedTradeRow {
   pnl: number;
   r_multiple?: number | null;
   setup_tag?: string | null;
+  /** @deprecated Use import_notes for broker/import metadata */
   notes?: string | null;
+  import_notes?: string | null;
   external_id?: string | null;
 }
 
@@ -36,7 +38,11 @@ export function normalizedToTradeInput(
   row: NormalizedTradeRow,
   source: TradeSource,
   externalId?: string | null
-): TradeInput & { source: TradeSource; external_id?: string | null } {
+): TradeInput & {
+  source: TradeSource;
+  external_id?: string | null;
+  import_notes?: string | null;
+} {
   return {
     traded_at: row.traded_at,
     symbol: row.symbol.toUpperCase(),
@@ -47,7 +53,8 @@ export function normalizedToTradeInput(
     pnl: row.pnl,
     r_multiple: row.r_multiple ?? null,
     setup_tag: row.setup_tag ?? null,
-    notes: row.notes ?? null,
+    notes: null,
+    import_notes: row.import_notes ?? row.notes ?? null,
     source,
     external_id: externalId ?? row.external_id ?? null,
   };

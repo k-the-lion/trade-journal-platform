@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createTrade, updateTrade } from "@/lib/actions";
 import { parseStrategyRules } from "@/lib/constants/strategies";
 import { MoodPicker } from "@/components/MoodPicker";
+import { displayImportNotes, displayJournalNotes } from "@/lib/trades/import-notes";
 import type { AccountType, Trade, TradeDirection, TradingStrategy } from "@/lib/types/database";
 
 interface TradeFormProps {
@@ -229,9 +230,16 @@ export function TradeForm({
         <input id="tags" name="tags" className="input" defaultValue={trade?.trade_tags?.map((t) => t.tag).join(", ") ?? ""} />
       </div>
 
+      {trade && displayImportNotes(trade) && (
+        <div className="rounded-lg border border-border/60 p-3 bg-background/40">
+          <p className="text-xs font-medium text-muted mb-1">Import notes</p>
+          <p className="text-sm text-muted whitespace-pre-wrap">{displayImportNotes(trade)}</p>
+        </div>
+      )}
+
       <div>
         <label className="label" htmlFor="notes">Journal notes</label>
-        <textarea id="notes" name="notes" rows={4} className="input resize-y" defaultValue={trade?.notes ?? ""} placeholder="What was your read? What would you repeat or change?" />
+        <textarea id="notes" name="notes" rows={4} className="input resize-y" defaultValue={trade ? displayJournalNotes(trade) : ""} placeholder="What was your read? What would you repeat or change?" />
       </div>
 
       <div className="flex gap-3">

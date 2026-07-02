@@ -29,7 +29,7 @@ export function normalizeTopstepXTrade(
     exit_price: Number(trade.price),
     quantity: Math.abs(Number(trade.size)) || 1,
     pnl: netPnl,
-    notes: fees > 0 ? `Fees: $${fees.toFixed(2)}` : null,
+    import_notes: fees > 0 ? `Fees: $${fees.toFixed(2)}` : null,
     external_id: `topstepx-${trade.id}`,
   };
 }

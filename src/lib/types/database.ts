@@ -180,6 +180,7 @@ export interface Trade {
   r_multiple: number | null;
   setup_tag: string | null;
   notes: string | null;
+  import_notes: string | null;
   emotional_state: string | null;
   mood_before: string | null;
   mood_after: string | null;

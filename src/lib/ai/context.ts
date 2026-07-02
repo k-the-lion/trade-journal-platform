@@ -107,7 +107,10 @@ function formatTradeLine(trade: Trade): string {
       : trade.rule_followed === false
         ? "rules: BROKEN"
         : null,
-    clip(trade.notes, MAX_NOTE_CHARS) ? `notes: ${clip(trade.notes, MAX_NOTE_CHARS)}` : null,
+    clip(trade.notes, MAX_NOTE_CHARS) ? `journal: ${clip(trade.notes, MAX_NOTE_CHARS)}` : null,
+    clip(trade.import_notes, MAX_NOTE_CHARS)
+      ? `import details: ${clip(trade.import_notes, MAX_NOTE_CHARS)}`
+      : null,
   ].filter(Boolean);
 
   const screenshots = formatScreenshots(trade);

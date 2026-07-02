@@ -19,6 +19,7 @@ import { DeleteTradeButton } from "@/components/DeleteTradeButton";
 import { StatCard } from "@/components/StatCard";
 import { TagPicker } from "@/components/TagPicker";
 import { firstTradeMedia, TradeMediaThumb } from "@/components/TradeMediaThumb";
+import { displayImportNotes, displayJournalNotes } from "@/lib/trades/import-notes";
 import type { Trade, TradingAccount, TradingStrategy, TradingTagPreset } from "@/lib/types/database";
 
 type SortKey = "date" | "pnl" | "symbol" | "direction";
@@ -615,7 +616,7 @@ function TradeJournalRow({
   strategies: TradingStrategy[];
   tagPresets: TradingTagPreset[];
 }) {
-  const [notes, setNotes] = useState(trade.notes ?? "");
+  const [notes, setNotes] = useState(() => displayJournalNotes(trade));
   const [moodBefore, setMoodBefore] = useState(
     trade.mood_before ?? trade.emotional_state ?? ""
   );
@@ -637,9 +638,10 @@ function TradeJournalRow({
   const addingLinkRef = useRef(false);
 
   const screenshots = trade.trade_screenshots ?? [];
+  const importNotes = displayImportNotes(trade);
 
   useEffect(() => {
-    setNotes(trade.notes ?? "");
+    setNotes(displayJournalNotes(trade));
     setMoodBefore(trade.mood_before ?? trade.emotional_state ?? "");
     setMoodAfter(trade.mood_after ?? trade.emotional_state ?? "");
     setStrategyId(trade.strategy_id ?? "");
@@ -798,8 +800,8 @@ function TradeJournalRow({
               <p className="text-xs text-muted mt-0.5">
                 {trade.traded_at.slice(0, 16).replace("T", " ")}
               </p>
-              {trade.notes && !expanded && (
-                <p className="text-sm text-muted mt-1 line-clamp-1">{trade.notes}</p>
+              {displayJournalNotes(trade) && !expanded && (
+                <p className="text-sm text-muted mt-1 line-clamp-1">{displayJournalNotes(trade)}</p>
               )}
             </div>
           <div className={`text-sm font-medium shrink-0 ${pnl >= 0 ? "positive" : "negative"}`}>
@@ -844,9 +846,12 @@ function TradeJournalRow({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
             <div>
               <label className="label">Strategy</label>
+              <p className="text-xs text-muted mb-1.5 sm:min-h-[2.5rem]">
+                Which setup or playbook this trade followed
+              </p>
               <select
                 className="input"
                 value={strategyId}
@@ -867,12 +872,19 @@ function TradeJournalRow({
             </div>
             <div>
               <label className="label">Extra tags</label>
-              <p className="text-xs text-muted mb-1.5">
+              <p className="text-xs text-muted mb-1.5 sm:min-h-[2.5rem]">
                 Quick labels for what you did (R:R, session, setup quality)
               </p>
               <TagPicker value={tags} onChange={setTags} presets={tagPresets} />
             </div>
           </div>
+
+          {importNotes && (
+            <div className="rounded-lg border border-border/60 p-3 bg-background/40">
+              <p className="text-xs font-medium text-muted mb-1">Import notes</p>
+              <p className="text-sm text-muted whitespace-pre-wrap">{importNotes}</p>
+            </div>
+          )}
 
           {selectedStrategy && strategyRules.length > 0 && (
             <div className="rounded-lg border border-border/60 p-3 bg-background/40">
