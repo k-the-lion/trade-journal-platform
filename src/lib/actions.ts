@@ -415,16 +415,29 @@ export async function uploadTradeScreenshot(tradeId: string, formData: FormData)
     .select("*", { count: "exact", head: true })
     .eq("trade_id", tradeId);
 
-  const { error: dbError } = await supabase.from("trade_screenshots").insert({
-    trade_id: tradeId,
-    storage_path: path,
-    sort_order: count ?? 0,
-  });
+  const { data: inserted, error: dbError } = await supabase
+    .from("trade_screenshots")
+    .insert({
+      trade_id: tradeId,
+      storage_path: path,
+      sort_order: count ?? 0,
+    })
+    .select()
+    .single();
 
   if (dbError) throw new Error(dbError.message);
 
+  let signed_url: string | undefined;
+  if (inserted.storage_path) {
+    const { data: signed } = await supabase.storage
+      .from(BUCKET)
+      .createSignedUrl(inserted.storage_path, 3600);
+    signed_url = signed?.signedUrl;
+  }
+
   revalidatePath("/dashboard");
   revalidatePath(`/trades/${tradeId}`);
+  return { ...inserted, signed_url };
 }
 
 export async function addTradeScreenshotLink(tradeId: string, rawUrl: string) {

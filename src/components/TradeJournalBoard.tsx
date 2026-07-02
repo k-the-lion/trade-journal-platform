@@ -234,21 +234,31 @@ export function TradeJournalBoard({
     return sortDir === "asc" ? " ↑" : " ↓";
   }
 
-  async function handleScreenshotUpload(tradeId: string, file: File) {
+  const handleScreenshotUpload = useCallback(async (tradeId: string, file: File) => {
     const fd = new FormData();
     fd.set("file", file);
-    startTransition(async () => {
-      await uploadTradeScreenshot(tradeId, fd);
-      window.location.reload();
-    });
-  }
+    const inserted = await uploadTradeScreenshot(tradeId, fd);
+    setTrades((prev) =>
+      prev.map((t) =>
+        t.id === tradeId
+          ? {
+              ...t,
+              trade_screenshots: [...(t.trade_screenshots ?? []), inserted],
+            }
+          : t
+      )
+    );
+  }, []);
 
-  async function handleScreenshotDelete(screenshotId: string) {
-    startTransition(async () => {
-      await deleteTradeScreenshot(screenshotId);
-      window.location.reload();
-    });
-  }
+  const handleScreenshotDelete = useCallback(async (screenshotId: string) => {
+    await deleteTradeScreenshot(screenshotId);
+    setTrades((prev) =>
+      prev.map((t) => ({
+        ...t,
+        trade_screenshots: (t.trade_screenshots ?? []).filter((s) => s.id !== screenshotId),
+      }))
+    );
+  }, []);
 
   async function handleDeleteTrade(tradeId: string) {
     setTrades((prev) => prev.filter((t) => t.id !== tradeId));
@@ -598,9 +608,9 @@ function TradeJournalRow({
     ruleFollowed: string,
     tags: string
   ) => Promise<void>;
-  onUpload: (file: File) => void;
+  onUpload: (file: File) => Promise<void>;
   onAddLink: (url: string) => Promise<void>;
-  onDeleteScreenshot: (id: string) => void;
+  onDeleteScreenshot: (id: string) => Promise<void>;
   onDeleted: (tradeId: string) => void;
   strategies: TradingStrategy[];
   tagPresets: TradingTagPreset[];
@@ -622,6 +632,7 @@ function TradeJournalRow({
   const [chartLink, setChartLink] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [linkStatus, setLinkStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [mediaStatus, setMediaStatus] = useState<"idle" | "uploading" | "saved" | "error">("idle");
   const skipJournalSaveRef = useRef(true);
   const addingLinkRef = useRef(false);
 
@@ -690,12 +701,23 @@ function TradeJournalRow({
     return () => window.clearTimeout(timer);
   }, [chartLink, expanded, screenshots, onAddLink]);
 
+  async function handleMediaUpload(file: File) {
+    setMediaStatus("uploading");
+    try {
+      await onUpload(file);
+      setMediaStatus("saved");
+      window.setTimeout(() => setMediaStatus("idle"), 2000);
+    } catch {
+      setMediaStatus("error");
+    }
+  }
+
   function handlePasteMedia(e: React.ClipboardEvent) {
     if (!expanded) return;
     const file = imageFileFromClipboard(e.clipboardData);
     if (!file) return;
     e.preventDefault();
-    onUpload(file);
+    void handleMediaUpload(file);
   }
 
   const selectedStrategy =
@@ -801,6 +823,13 @@ function TradeJournalRow({
               )}
               {linkStatus === "error" && (
                 <span className="text-danger"> · Could not add link</span>
+              )}
+              {mediaStatus === "uploading" && " · Uploading image…"}
+              {mediaStatus === "saved" && (
+                <span className="text-success"> · Image added</span>
+              )}
+              {mediaStatus === "error" && (
+                <span className="text-danger"> · Image upload failed</span>
               )}
             </p>
           </div>
@@ -913,7 +942,8 @@ function TradeJournalRow({
                   className="sr-only"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) onUpload(f);
+                    if (f) void handleMediaUpload(f);
+                    e.target.value = "";
                   }}
                 />
               </label>
