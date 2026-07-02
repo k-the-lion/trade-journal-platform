@@ -4,7 +4,6 @@ import { classifyTradingViewExport } from "./tradingview-adapter";
 export type ImportPreset =
   | "auto"
   | "topstepx"
-  | "tradovate_position"
   | "tradovate_orders"
   | "tradingview_balance"
   | "tradingview_orders"
@@ -52,7 +51,7 @@ export function detectImportFormat(csvText: string): DetectedFormat {
     };
   }
 
-  // Tradovate Position History — matched round trips
+  // Tradovate Position History — direct users to Orders export instead
   if (
     has(["Contract", "Product"]) &&
     has(["P&L", "PnL", "Realized P&L", "Net P&L"]) &&
@@ -60,10 +59,13 @@ export function detectImportFormat(csvText: string): DetectedFormat {
       has(["Exit Time", "Sold Timestamp", "Close Time"]))
   ) {
     return {
-      preset: "tradovate_position",
+      preset: "generic",
       source: "tradovate",
       label: "Tradovate (Position History)",
       confidence: "high",
+      unsupported: true,
+      unsupportedReason:
+        "This looks like a Tradovate Position History export. Use the Orders report instead: Tradovate → Reports → Orders tab → Download CSV.",
     };
   }
 
@@ -77,7 +79,7 @@ export function detectImportFormat(csvText: string): DetectedFormat {
     return {
       preset: "tradovate_orders",
       source: "tradovate",
-      label: "Tradovate (Orders / Fills)",
+      label: "Tradovate (Orders)",
       confidence: "medium",
     };
   }
@@ -210,7 +212,6 @@ export function presetToAdapterKey(preset: ImportPreset): string {
   switch (preset) {
     case "topstepx":
       return "topstepx";
-    case "tradovate_position":
     case "tradovate_orders":
       return "tradovate";
     case "tradingview_balance":

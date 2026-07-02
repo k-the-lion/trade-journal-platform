@@ -32,8 +32,7 @@ const FIELD_OPTIONS = [
 const PRESET_OPTIONS: { value: ImportPreset; label: string }[] = [
   { value: "auto", label: "Auto-detect" },
   { value: "topstepx", label: "TopStep X (Trades export)" },
-  { value: "tradovate_position", label: "Tradovate (Position History)" },
-  { value: "tradovate_orders", label: "Tradovate (Orders / Fills)" },
+  { value: "tradovate_orders", label: "Tradovate (Orders)" },
   { value: "tradingview_balance", label: "TradingView (Balance History)" },
   { value: "tradingview_orders", label: "TradingView (Order History)" },
   { value: "tradingview_journal", label: "TradingView (Trading journal)" },
@@ -44,10 +43,8 @@ const EXPORT_GUIDES: Record<ImportPreset, string> = {
   auto: "Upload your broker export — we'll detect TopStep X, Tradovate, or TradingView automatically.",
   topstepx:
     "TopStep X → bottom Trades tab → Export → pick date range → download CSV. Don't edit the file.",
-  tradovate_position:
-    "Tradovate → Accounts → gear icon → Position History → date range → Download Report. Best for P&L.",
   tradovate_orders:
-    "Tradovate → Reports → Orders tab (NOT Performance) → Download CSV. We pair buy/sell fills into round trips with calculated P&L.",
+    "Tradovate → Reports → Orders tab → Download CSV. We pair buy/sell fills into round trips with P&L.",
   tradingview_balance:
     "TradingView → Paper Trading panel → Balance History tab → Export data. Each row is a closed trade with realized P&L.",
   tradingview_orders:

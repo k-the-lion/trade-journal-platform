@@ -328,20 +328,11 @@ function parseTradovateOrders(
 
 export function parseTradovateCsv(
   csvText: string,
-  mode: TradovateMode = "auto"
+  mode: TradovateMode = "orders"
 ): ImportAdapterResult {
   const { headers, rows, errors } = parseCsvRows(csvText);
 
-  const looksLikePosition =
-    Boolean(findColumn(headers, ["P&L", "PnL", "Realized P&L"])) &&
-    Boolean(
-      findColumn(headers, ["Exit Price", "Close Price", "Exit Time", "Sold Timestamp"])
-    );
-
-  const effectiveMode =
-    mode === "auto" ? (looksLikePosition ? "position" : "orders") : mode;
-
-  if (effectiveMode === "position") {
+  if (mode === "position") {
     return parseTradovatePositionHistory(headers, rows, errors);
   }
   return parseTradovateOrders(headers, rows, errors);
@@ -349,7 +340,7 @@ export function parseTradovateCsv(
 
 export const tradovateImportAdapter: ImportAdapter = {
   source: "tradovate",
-  name: "Tradovate CSV",
+  name: "Tradovate (Orders CSV)",
   supportedFields: [
     "Contract",
     "Product",
@@ -363,7 +354,7 @@ export const tradovateImportAdapter: ImportAdapter = {
   ],
   parse(input, options) {
     const text = typeof input === "string" ? input : "";
-    const mode = (options?.mode as TradovateMode) ?? "auto";
+    const mode = (options?.mode as TradovateMode) ?? "orders";
     return parseTradovateCsv(text, mode);
   },
 };

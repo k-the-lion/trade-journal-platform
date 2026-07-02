@@ -150,7 +150,7 @@ export function ImportTabs({
             footnote={
               tradovateOAuthConfigured
                 ? undefined
-                : "OAuth is not enabled on this deployment yet — use the CSV upload tab with a Tradovate Position History export until it is."
+                : "OAuth is not enabled on this deployment yet — use the CSV upload tab with a Tradovate Orders export until it is."
             }
           />
         </div>

@@ -820,8 +820,6 @@ export async function importCsvTrades(
 
   if (effectivePreset === "tradovate_orders") {
     parseOptions.mode = "orders";
-  } else if (effectivePreset === "tradovate_position") {
-    parseOptions.mode = "position";
   } else if (effectivePreset === "tradingview_orders") {
     parseOptions.mode = "orders";
   } else if (effectivePreset === "tradingview_balance") {
