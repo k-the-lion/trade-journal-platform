@@ -14,6 +14,7 @@ import {
   UNTAGGED,
 } from "@/lib/ai/coach-filters";
 import { moodLabel } from "@/lib/constants/trade-meta";
+import { formatHoldDuration } from "@/lib/trades/datetime";
 import { computeTradeStats } from "@/lib/reports/stats";
 
 const MAX_TRADE_DETAILS = 40;
@@ -91,8 +92,16 @@ function formatTradeLine(trade: Trade): string {
         ? moodLabel(trade.emotional_state)
         : null;
 
+  const hold =
+    trade.entry_at && trade.traded_at
+      ? formatHoldDuration(trade.entry_at, trade.traded_at)
+      : null;
+
   const bits = [
     `${trade.traded_at.slice(0, 10)} ${trade.symbol} ${trade.direction}`,
+    trade.entry_at ? `entry ${trade.entry_at.slice(0, 16).replace("T", " ")}` : null,
+    `exit ${trade.traded_at.slice(0, 16).replace("T", " ")}`,
+    hold ? `hold ${hold}` : null,
     `P&L $${trade.pnl}`,
     trade.quantity != null ? `qty ${trade.quantity}` : null,
     trade.entry_price != null ? `entry ${trade.entry_price}` : null,

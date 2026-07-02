@@ -3,6 +3,7 @@ import type { TradeInput, TradeSource } from "@/lib/types/database";
 /** Normalized row from any import source before DB insert */
 export interface NormalizedTradeRow {
   traded_at: string;
+  entry_at?: string | null;
   symbol: string;
   direction: "long" | "short";
   entry_price?: number | null;
@@ -45,6 +46,7 @@ export function normalizedToTradeInput(
 } {
   return {
     traded_at: row.traded_at,
+    entry_at: row.entry_at ?? null,
     symbol: row.symbol.toUpperCase(),
     direction: row.direction,
     entry_price: row.entry_price ?? null,

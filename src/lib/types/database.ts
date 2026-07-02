@@ -171,6 +171,7 @@ export interface Trade {
   account_id: string | null;
   strategy_id: string | null;
   traded_at: string;
+  entry_at: string | null;
   symbol: string;
   direction: TradeDirection;
   entry_price: number | null;
@@ -252,6 +253,7 @@ export interface ChatMessage {
 
 export interface TradeInput {
   traded_at: string;
+  entry_at?: string | null;
   symbol: string;
   direction: TradeDirection;
   entry_price?: number | null;

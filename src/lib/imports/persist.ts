@@ -75,6 +75,17 @@ export async function persistImportedTrades(params: {
       `${tradeSource}-${tradeInput.traded_at.slice(0, 19)}-${tradeInput.symbol}-${tradeInput.direction}-${tradeInput.pnl}`;
 
     if (existingIds.has(externalId)) {
+      if (tradeInput.entry_at) {
+        await supabase
+          .from("trades")
+          .update({
+            entry_at: tradeInput.entry_at,
+            entry_price: tradeInput.entry_price ?? undefined,
+          })
+          .eq("user_id", userId)
+          .eq("external_id", externalId)
+          .is("entry_at", null);
+      }
       duplicatesSkipped++;
       continue;
     }
@@ -83,6 +94,7 @@ export async function persistImportedTrades(params: {
       user_id: userId,
       org_id: orgId ?? null,
       traded_at: tradeInput.traded_at,
+      entry_at: tradeInput.entry_at ?? null,
       symbol: tradeInput.symbol,
       direction: tradeInput.direction,
       entry_price: tradeInput.entry_price,

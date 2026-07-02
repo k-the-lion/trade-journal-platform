@@ -1,4 +1,5 @@
 import type { Trade } from "@/lib/types/database";
+import { computeHoldStats, formatAvgHoldMinutes } from "@/lib/trades/datetime";
 
 export interface TradeStats {
   totalTrades: number;
@@ -14,6 +15,8 @@ export interface TradeStats {
   maxDrawdown: number;
   bestDay: number;
   worstDay: number;
+  avgHoldMinutes: number | null;
+  tradesWithHold: number;
 }
 
 export interface EquityPoint {
@@ -49,6 +52,8 @@ export function computeTradeStats(trades: Trade[]): TradeStats {
       maxDrawdown: 0,
       bestDay: 0,
       worstDay: 0,
+      avgHoldMinutes: null,
+      tradesWithHold: 0,
     };
   }
 
@@ -109,6 +114,8 @@ export function computeTradeStats(trades: Trade[]): TradeStats {
     }
   }
 
+  const holdStats = computeHoldStats(trades);
+
   return {
     totalTrades: trades.length,
     totalPnl: round(totalPnl),
@@ -123,6 +130,8 @@ export function computeTradeStats(trades: Trade[]): TradeStats {
     maxDrawdown: round(maxDrawdown),
     bestDay: round(bestDay),
     worstDay: round(worstDay),
+    avgHoldMinutes: holdStats.avgHoldMinutes,
+    tradesWithHold: holdStats.tradesWithHold,
   };
 }
 

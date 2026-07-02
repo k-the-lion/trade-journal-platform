@@ -615,6 +615,7 @@ function parseOrderHistory(
 
       result.push({
         traded_at: exit.time,
+        entry_at: entry.time,
         symbol: fill.symbol,
         direction: entry.direction,
         entry_price: entryPrice,

@@ -18,6 +18,7 @@ import { FilterPanel } from "@/components/FilterPanel";
 import { DeleteTradeButton } from "@/components/DeleteTradeButton";
 import { StatCard } from "@/components/StatCard";
 import { TagPicker } from "@/components/TagPicker";
+import { TradeTimeLabel } from "@/components/TradeTimeLabel";
 import { firstTradeMedia, TradeMediaThumb } from "@/components/TradeMediaThumb";
 import { displayImportNotes, displayJournalNotes } from "@/lib/trades/import-notes";
 import type { Trade, TradingAccount, TradingStrategy, TradingTagPreset } from "@/lib/types/database";
@@ -831,9 +832,7 @@ function TradeJournalRow({
                   <span className="text-xs text-muted">{accountName}</span>
                 )}
               </div>
-              <p className="text-xs text-muted mt-0.5">
-                {trade.traded_at.slice(0, 16).replace("T", " ")}
-              </p>
+              <TradeTimeLabel trade={trade} />
               {displayJournalNotes(trade) && !expanded && (
                 <p className="text-sm text-muted mt-1 line-clamp-1">{displayJournalNotes(trade)}</p>
               )}

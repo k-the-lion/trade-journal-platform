@@ -100,11 +100,12 @@ export function parseTopstepXTrades(csvText: string): ImportAdapterResult {
     const netPnl = grossPnl;
 
     const timeRaw = col.time ? row[col.time] : undefined;
-    // Prefer exit time when both EnteredAt and ExitedAt exist — use ExitedAt column first in findColumn order
     const exitedAtCol = findColumn(headers, ["ExitedAt", "Exit Time"]);
+    const enteredAtCol = findColumn(headers, ["EnteredAt", "Entry Time"]);
     const traded_at = parseDate(
       exitedAtCol ? row[exitedAtCol] : timeRaw
     );
+    const entry_at = enteredAtCol ? parseDate(row[enteredAtCol]) : null;
     if (!traded_at) {
       skipped++;
       errors.push(`Row ${index + 2}: invalid or missing time`);
@@ -121,6 +122,7 @@ export function parseTopstepXTrades(csvText: string): ImportAdapterResult {
 
     result.push({
       traded_at,
+      entry_at,
       symbol: normalizeSymbol(symbolRaw),
       direction,
       entry_price: entry,

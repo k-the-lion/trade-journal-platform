@@ -25,6 +25,7 @@ import {
   formatCurrency,
   formatPct,
 } from "@/lib/reports/stats";
+import { formatAvgHoldMinutes } from "@/lib/trades/datetime";
 import {
   filterTradesForReports,
   hasActiveReportFilters,
@@ -251,6 +252,13 @@ export function ReportsView({
               value={`${stats.currentStreak} ${stats.currentStreakType}`}
               sub={`Best day: ${formatCurrency(stats.bestDay)}`}
             />
+            {stats.tradesWithHold > 0 && (
+              <StatCard
+                label="Avg time in trade"
+                value={formatAvgHoldMinutes(stats.avgHoldMinutes!)}
+                sub={`${stats.tradesWithHold} trades with entry time`}
+              />
+            )}
           </div>
 
           <EquityCurveChart data={equity} />
