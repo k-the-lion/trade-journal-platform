@@ -12,7 +12,7 @@ import {
 import { parseStrategyRules } from "@/lib/constants/strategies";
 import { moodEmoji, moodLabel } from "@/lib/constants/trade-meta";
 import { computeTradeStats, formatCurrency } from "@/lib/reports/stats";
-import { isAllowedChartLink, normalizeChartLink } from "@/lib/screenshots";
+import { isAllowedChartLink, imageFileFromClipboard, normalizeChartLink } from "@/lib/screenshots";
 import { MoodPicker } from "@/components/MoodPicker";
 import { FilterPanel } from "@/components/FilterPanel";
 import { DeleteTradeButton } from "@/components/DeleteTradeButton";
@@ -690,6 +690,14 @@ function TradeJournalRow({
     return () => window.clearTimeout(timer);
   }, [chartLink, expanded, screenshots, onAddLink]);
 
+  function handlePasteMedia(e: React.ClipboardEvent) {
+    if (!expanded) return;
+    const file = imageFileFromClipboard(e.clipboardData);
+    if (!file) return;
+    e.preventDefault();
+    onUpload(file);
+  }
+
   const selectedStrategy =
     strategies.find((s) => s.id === strategyId) ?? trade.trading_strategies ?? null;
   const strategyRules = selectedStrategy
@@ -873,12 +881,16 @@ function TradeJournalRow({
               className="input resize-y min-h-[100px]"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="What happened? What would you do differently?"
+              onPaste={handlePasteMedia}
+              placeholder="What happened? What would you do differently? (You can paste a screenshot here too.)"
             />
           </div>
 
-          <div>
+          <div onPaste={handlePasteMedia}>
             <label className="label">Screenshots & chart links</label>
+            <p className="text-xs text-muted mb-2">
+              Paste an image (Ctrl+V / ⌘V), upload a file, or add a TradingView link.
+            </p>
             <div className="flex flex-wrap gap-2 mt-2">
               {screenshots.map((shot) => (
                 <div key={shot.id} className="relative group">
@@ -910,6 +922,7 @@ function TradeJournalRow({
               className="input w-full text-sm mt-3"
               value={chartLink}
               onChange={(e) => setChartLink(e.target.value)}
+              onPaste={handlePasteMedia}
               placeholder="Paste TradingView link — saves automatically"
             />
           </div>

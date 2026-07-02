@@ -27,3 +27,23 @@ export function chartLinkLabel(url: string): string {
 export function chartPreviewApiUrl(chartUrl: string): string {
   return `/api/chart-preview?url=${encodeURIComponent(normalizeChartLink(chartUrl))}`;
 }
+
+/** Extract a pasted image from the clipboard (screenshot, copied chart, etc.). */
+export function imageFileFromClipboard(
+  clipboardData: DataTransfer | null | undefined
+): File | null {
+  if (!clipboardData?.items?.length) return null;
+
+  for (let i = 0; i < clipboardData.items.length; i++) {
+    const item = clipboardData.items[i];
+    if (!item.type.startsWith("image/")) continue;
+
+    const blob = item.getAsFile();
+    if (!blob) continue;
+
+    const ext = item.type.split("/")[1]?.replace("jpeg", "jpg") ?? "png";
+    return new File([blob], `pasted-${Date.now()}.${ext}`, { type: item.type });
+  }
+
+  return null;
+}
