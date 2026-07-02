@@ -47,3 +47,27 @@ export function imageFileFromClipboard(
 
   return null;
 }
+
+function fileFromImageBlob(blob: Blob, type: string): File {
+  const ext = type.split("/")[1]?.replace("jpeg", "jpg") ?? "png";
+  return new File([blob], `pasted-${Date.now()}.${ext}`, { type });
+}
+
+/** Read a copied image after a user click (requires clipboard permission). */
+export async function imageFileFromSystemClipboard(): Promise<File | null> {
+  if (!navigator.clipboard?.read) return null;
+
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imageType = item.types.find((t) => t.startsWith("image/"));
+      if (!imageType) continue;
+      const blob = await item.getType(imageType);
+      return fileFromImageBlob(blob, imageType);
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}

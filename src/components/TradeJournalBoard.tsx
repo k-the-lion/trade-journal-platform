@@ -12,7 +12,7 @@ import {
 import { parseStrategyRules } from "@/lib/constants/strategies";
 import { moodEmoji, moodLabel } from "@/lib/constants/trade-meta";
 import { computeTradeStats, formatCurrency } from "@/lib/reports/stats";
-import { isAllowedChartLink, imageFileFromClipboard, normalizeChartLink } from "@/lib/screenshots";
+import { isAllowedChartLink, imageFileFromClipboard, imageFileFromSystemClipboard, normalizeChartLink } from "@/lib/screenshots";
 import { MoodPicker } from "@/components/MoodPicker";
 import { FilterPanel } from "@/components/FilterPanel";
 import { DeleteTradeButton } from "@/components/DeleteTradeButton";
@@ -636,6 +636,7 @@ function TradeJournalRow({
   const [mediaStatus, setMediaStatus] = useState<"idle" | "uploading" | "saved" | "error">("idle");
   const skipJournalSaveRef = useRef(true);
   const addingLinkRef = useRef(false);
+  const thumbPasteRef = useRef<HTMLButtonElement>(null);
 
   const screenshots = trade.trade_screenshots ?? [];
   const importNotes = displayImportNotes(trade);
@@ -714,6 +715,29 @@ function TradeJournalRow({
     }
   }
 
+  async function uploadClipboardImage(file: File) {
+    await handleMediaUpload(file);
+  }
+
+  async function handleThumbPlaceholderClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    thumbPasteRef.current?.focus();
+
+    const file = await imageFileFromSystemClipboard();
+    if (file) {
+      e.preventDefault();
+      await uploadClipboardImage(file);
+    }
+  }
+
+  function handleThumbPlaceholderPaste(e: React.ClipboardEvent) {
+    const file = imageFileFromClipboard(e.clipboardData);
+    if (!file) return;
+    e.preventDefault();
+    e.stopPropagation();
+    void uploadClipboardImage(file);
+  }
+
   function handlePasteMedia(e: React.ClipboardEvent) {
     if (!expanded) return;
     const file = imageFileFromClipboard(e.clipboardData);
@@ -748,9 +772,19 @@ function TradeJournalRow({
             <TradeMediaThumb shot={thumb} size="sm" interactive={false} />
           </div>
         ) : (
-          <div className="w-16 h-16 rounded border border-dashed border-border flex items-center justify-center text-muted text-xs shrink-0 mt-0.5">
+          <button
+            ref={thumbPasteRef}
+            type="button"
+            aria-label="Paste screenshot"
+            onClick={(e) => void handleThumbPlaceholderClick(e)}
+            onPaste={handleThumbPlaceholderPaste}
+            disabled={mediaStatus === "uploading"}
+            className={`w-16 h-16 rounded border border-dashed border-border flex items-center justify-center text-muted text-xs shrink-0 mt-0.5 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+              mediaStatus === "uploading" ? "opacity-50 cursor-wait" : "hover:border-primary/40 cursor-pointer"
+            }`}
+          >
             No img
-          </div>
+          </button>
         )}
         <button
           type="button"
